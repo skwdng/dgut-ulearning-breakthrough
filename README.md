@@ -232,34 +232,13 @@ EXPO_PUBLIC_DGUT_AUTH_HOST=https://auth.dgut.edu.cn
 - 注意：教师设定的**中心点与半径需要从签到详情接口读取**（`ENDPOINTS.rollcallDetail`，见 tech-spec §11 P0）；当前用课程配置的位置作为范围来源
 
 
-### ❌ 未实现（有意留白，都有明确原因）
+### ❌ 未实现
 
-| 能力 | 原因 | 后续方案 |
-|---|---|---|
-| iOS/Android 后台常驻轮询 | RN 无原生前台服务；iOS 后台约 30s 被挂起 | Android 接前台服务；iOS 需要服务端轮询组件 |
-| 推送通知 | 需要 FCM/APNs 配置与原生构建 | 接 `expo-notifications` + 服务端 |
-| 地图瓦片底图 | 需要地图 SDK 与 Key | 接高德/腾讯地图，把 `LocationPicker` 的矢量画布换成 `MapView`（逻辑层不用动） |
-| 从服务端读取签到范围 | 需要抓包确认签到详情接口字段 | 完成 tech-spec §11 P0，替换 `defaultCircleFor` 的数据来源 |
-| 真实优学院业务端点 | 未做真机抓包（`web_fetch` 无法访问参考实现源码） | 完成 tech-spec §11 P0 |
-| 登录态安全存储 | 目前用普通存储便于联调 | 上线前切 `secureStore`（Keychain/Keystore） |
-| 深色模式 | 设计系统未定义暗色 Token | 按 ui-spec 扩展 |
+| iOS端无法使用！！！
 
 ---
 
-## 5. 关于"第三方自动签到服务"的说明
-
-市面上有人提供"某校优学院签到"这类第三方模块（把学号+姓名交给对方，由对方开启/取消）。
-本工程**没有依赖它**，原因：
-
-1. 那是别人的服务，接口、稳定性、隐私（学号+姓名在对方手里）都不受使用者控制；
-2. 已确认要**自己做自动化**。
-
-如将来仍想接入，只需按 `src/services/checkin/types.ts` 的 `CheckinAdapter` 契约新写一个
-`ThirdPartyAdapter`，在 `src/services/checkin/index.ts` 里多一个分支即可，**页面代码零改动**。
-
----
-
-## 6. 风控与合规
+## 5. 风控与合规
 
 - 本功能定位于**课堂考勤辅助**，用户须自行确认符合学校规定与课程要求；
 - 轮询做了抖动、随机延迟、夜间静默、单日上限、限流退避与熔断，但这只能降低风险，**无法保证不触发风控**；
@@ -267,7 +246,7 @@ EXPO_PUBLIC_DGUT_AUTH_HOST=https://auth.dgut.edu.cn
 
 ---
 
-## 7. 下一步建议（按优先级）
+## 6. 下一步建议（按优先级）
 
 1. **补 npm 环境并跑起来**：`npm install` → `npm start`，先用 MOCK 模式把 5 个状态走一遍；
 2. **完成 tech-spec §11 的 P0 抓包**：确定活动列表/签到详情/提交三个接口的路径与字段；
