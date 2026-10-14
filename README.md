@@ -68,16 +68,6 @@ npm run ios          # 需要 macOS + Xcode
 npx expo prebuild    # 生成原生工程（要加通知监听等原生能力时必须）
 ```
 
-### ⚠️ 为什么必须用 npm 而不是 pnpm
-
-本项目实测踩过坑：**pnpm 的严格符号链接布局会让 Metro / @expo/cli 解析到错误版本**，
-表现为 `WebSocketServer is not a constructor`、`Class extends value #<Object> is not a constructor`（minipass 冲突）。
-即使加了 `overrides` 也无效，因为 pnpm 的 `.pnpm/node_modules` 提升副本不受 override 控制。
-
-**npm 的扁平布局没有这个问题** —— 实测一次装好、打包成功。
-
-> 如果 pnpm 是你唯一选择：需在 `.npmrc` 里加 `node-linker=hoisted`，并把 `ws@^8` 与 `minipass@^3.3.6`
-> 作为**直接依赖**装到根目录。但仍可能遇到其他同类冲突，不推荐。
 
 ### ⚙️ 你的电脑上可以直接删掉这一行
 
