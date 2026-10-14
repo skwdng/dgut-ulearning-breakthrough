@@ -246,10 +246,5 @@ EXPO_PUBLIC_DGUT_AUTH_HOST=https://auth.dgut.edu.cn
 
 ---
 
-## 6. 下一步建议（按优先级）
-
-1. **补 npm 环境并跑起来**：`npm install` → `npm start`，先用 MOCK 模式把 5 个状态走一遍；
-2. **完成 tech-spec §11 的 P0 抓包**：确定活动列表/签到详情/提交三个接口的路径与字段；
-3. 用抓包结果替换 `youxueAdapter.ts` 的 `ENDPOINTS` 与解析函数，切 `EXPO_PUBLIC_YOUXUE_ADAPTER=youxue`；
-4. Android 接前台服务（`expo-task-manager` + 原生 foreground service）解决后台保活；
-5. iOS 若需可靠自动化，规划服务端轮询组件（多用户凭据加密隔离）。
+## 6.总结一下
+剩下两个模块（外卖，ai）暂且没有开发，ios端目前无法使用，加减分功能稍后更，有点不中功能加减分目前没有很大意义，最重要的功能目前已经实现了，等后续完善。。
