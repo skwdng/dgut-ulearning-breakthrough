@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>LifeKit 用户管理</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --card:#fff; --line:#e6e8ef; --text:#1f2430; --sub:#6b7280;
+    --brand:#4f46e5; --ok:#059669; --warn:#d97706; --err:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;font-size:14px}
+  .wrap{max-width:1080px;margin:0 auto;padding:20px}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--sub);font-size:13px;margin-bottom:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+  .card h2{font-size:15px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  input,button,select{font:inherit}
+  input[type=text],input[type=number]{flex:1;min-width:180px;padding:9px 12px;border:1px solid var(--line);
+    border-radius:8px;background:#fbfbfd;color:var(--text)}
+  input:focus{outline:2px solid #c7d2fe;border-color:#c7d2fe}
+  button{padding:9px 16px;border:none;border-radius:8px;background:var(--brand);color:#fff;cursor:pointer;font-weight:600}
+  button:hover{filter:brightness(1.06)}
+  button.ghost{background:#eef0f7;color:var(--text)}
+  button.danger{background:#fee2e2;color:var(--err)}
+  button.tiny{padding:5px 10px;font-size:12px;border-radius:6px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{color:var(--sub);font-weight:600;font-size:12px;background:#fafbfe}
+  tr:last-child td{border-bottom:none}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600}
+  .pill.ok{background:#d1fae5;color:var(--ok)}
+  .pill.no{background:#f3f4f6;color:var(--sub)}
+  .pill.code{background:#eef2ff;color:var(--brand)}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .stat{display:flex;gap:24px;flex-wrap:wrap}
+  .stat div{min-width:110px}
+  .stat b{display:block;font-size:24px;line-height:1.2}
+  .stat span{color:var(--sub);font-size:12px}
+  .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#111827;color:#fff;
+    padding:10px 18px;border-radius:999px;opacity:0;transition:.25s;pointer-events:none;font-size:13px;z-index:9}
+  .toast.show{opacity:.94}
+  .hint{color:var(--sub);font-size:12px;margin-top:8px;line-height:1.6}
+  .empty{color:var(--sub);text-align:center;padding:28px 0}
+  .addr{background:#eef2ff;border-radius:8px;padding:10px 12px;font-family:ui-monospace,monospace;font-size:13px}
+  .warnbox{background:#fffbeb;border:1px dashed #fcd34d;border-radius:8px;padding:10px 12px;color:#92400e;font-size:12px;line-height:1.7}
+  .hist{color:var(--sub);font-size:12px;line-height:1.8}
+</style>
+</head>
+<body>
+<!-- ── 直接用文件打开时的提示 ──
+     从 file:// 打开的网页**不能**调用 http:// 接口（浏览器安全限制），
+     所有请求都会 Failed to fetch。这里检测到就直接拦住并告诉正确做法。 -->
+<div id="file-warn" style="display:none;max-width:760px;margin:40px auto;padding:0 20px">
+  <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:22px">
+    <h2 style="margin:0 0 10px;font-size:19px;color:#92400e">⚠️ 打开方式不对</h2>
+    <p style="margin:0 0 14px;color:#92400e;line-height:1.8">
+      你现在是<b>直接双击网页文件</b>打开的（地址栏以 <code>file://</code> 开头）。<br>
+      这样浏览器<b>不允许</b>网页去调用后台服务，所以全部显示"读取失败 / Failed to fetch"。
+    </p>
+    <p style="margin:0 0 14px;color:#92400e;line-height:1.8">
+      <b>正确做法：</b>回到这个文件夹，双击
+      <code style="background:#fff;padding:2px 6px;border-radius:4px">打开管理后台.cmd</code>
+      —— 它会启动服务并自动打开正确的网址。
+    </p>
+    <p style="margin:0 0 0;color:#92400e;line-height:1.8">
+      或者手动在浏览器地址栏输入：
+      <a id="file-warn-link" href="http://127.0.0.1:8787/admin"
+         style="color:#4f46e5;font-weight:600">http://127.0.0.1:8787/admin</a>
+    </p>
+  </div>
+</div>
+
+<div class="wrap" id="main-wrap">
+  <h1>LifeKit 用户管理</h1>
+  <div class="sub">管理填过优学院学号的用户，以及修改万能码（改完立刻生效，App 不用重装）</div>
+
+  <div class="card">
+    <h2>📊 概览</h2>
+    <div class="stat">
+      <div><b id="stat-total">—</b><span>登记用户</span></div>
+      <div><b id="stat-auth">—</b><span>已授权</span></div>
+      <div><b id="stat-code">—</b><span>万能码（只存哈希）</span></div>
+    </div>
+  </div>
+
+  <!-- ══════════ 生成授权码（最常用，放最上面）══════════ -->
+  <div class="card" style="border-color:#c7d2fe;background:linear-gradient(180deg,#f5f7ff,#fff)">
+    <h2>🎫 生成授权码</h2>
+    <div class="hint" style="margin-top:0;margin-bottom:12px">
+      输入对方学号 → 生成一份**绑定该学号**的授权码 → 把它发给对方。<br>
+      对方在 App 里「设置 → 授权码」填入即可使用。这个码**只有那个学号能用**，转给别人填会被拒。
+    </div>
+    <div class="row">
+      <!--
+        ⚠️ 占位符**不要写真实学号**。
+        原先这里写的是 `对方学号（例如 <某个真实学号>）` —— 那是真人的学号，
+        而管理页可能被截图、被别人看到。
+        改成纯格式提示：不点出任何具体学号。
+      -->
+      <input type="text" id="issue-sid" placeholder="对方学号（8-12 位数字）" class="mono"
+             autocomplete="off" inputmode="numeric"
+             onkeydown="if(event.key==='Enter')doIssue()" />
+      <input type="text" id="issue-name" placeholder="姓名（选填）" style="max-width:160px" autocomplete="off" />
+      <button onclick="doIssue()" id="issue-btn">生成</button>
+    </div>
+
+    <!--
+      ★ 生效时间与次数（选填）
+      需求：「所有人默认的授权码生效时间是永久，然后生效次数是无限次，
+            我可以在管理端自由设定生效时间和次数，
+            生效时间要设置截止时间，注意不能设定当时之前的时间」
+      两个都留空 = 永久 + 不限次（默认）。
+    -->
+    <div class="row" style="margin-top:10px;align-items:center;gap:14px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#4b5563">
+        截止时间
+        <input type="datetime-local" id="issue-exp" style="max-width:210px" />
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#4b5563">
+        可用次数
+        <input type="number" id="issue-max" min="1" max="100000" placeholder="不限"
+               style="max-width:110px" />
+      </label>
+      <span style="font-size:12px;color:#9ca3af">都留空 = 永久 + 不限次</span>
+    </div>
+    <div class="hint" style="margin-top:6px">
+      · <b>截止时间</b>会编进授权码本身 —— 他断网时 App 也能本地判到期。<br>
+      · <b>次数</b>按"改了几次签到状态"算，由服务器记录（本地清数据也刷不掉）。<br>
+      · 截止时间<b>不能设成过去</b>，否则码发出去就是废的。
+    </div>
+
+    <div id="issue-result" style="margin-top:14px"></div>
+  </div>
+
+  <div class="card">
+    <h2>🔑 万能码</h2>
+    <div class="row">
+      <!--
+        ★ 这里只能**设置新码**，看不到当前码 ——
+        因为服务端现在只存哈希，它自己也拿不回明文。
+        这个设计是刻意的：万能码不再出现在网络上、也不存在磁盘里。
+      -->
+      <input type="password" id="master" placeholder="输入新的万能码（2-32 位字母或数字）"
+             autocomplete="off" />
+      <button class="ghost" id="master-eye" onclick="toggleMaster()">👁 显示</button>
+      <button onclick="saveMaster()">设为新码</button>
+      <button class="ghost" onclick="loadMaster()">刷新状态</button>
+    </div>
+    <div class="hint">
+      <b>① 当前是什么码，这里看不到</b> —— 服务端只保存它的哈希，<br>
+      　　所以即使 <span class="mono">data.json</span> 泄漏，也拿不到万能码。<br>
+      <b>② 忘了就重设一个</b>：直接在上面输入新的，点「设为新码」即可。<br>
+      <b>③ 改完立即生效</b> —— App 会拿用户输入的码来服务器校验，不需要重新打包。<br>
+      <b>④ 已发出去的个人授权码不受影响</b>（那些是本地校验的）。<br>
+      <br>
+      ⚠️ 手机连不上服务器时，App 会退回使用<b>内置码</b>
+      （内置码由打包时的 <span class="mono">EXPO_PUBLIC_MASTER_CODE</span> 决定）。
+      所以如果想让服务器上的码真正生效，就别用内置那个 —— 换个别的。
+    </div>
+    <div class="hist" id="hist"></div>
+  </div>
+
+  <!-- ══════════ 管理口令 ══════════ -->
+  <div class="card" style="border-color:#fca5a5;background:#fff7f7">
+    <h2>🔒 管理口令 <span id="pw-state" class="pill no">未启用</span></h2>
+    <div id="pw-warn" class="warnbox" style="margin-bottom:12px">
+      ⚠️ <b>现在没有口令</b> —— 同一个 WiFi 下<b>任何人都能打开这个页面</b>，<br>
+      看到所有人的学号、改万能码、把人踢下线。人一多就必须设一个。
+    </div>
+    <div class="row">
+      <input type="text" id="pw-input" placeholder="设置一个口令（至少 4 位）" />
+      <button onclick="savePassword()" id="pw-btn">启用口令</button>
+      <button class="ghost" onclick="clearPassword()" id="pw-clear-btn" style="display:none">关闭口令</button>
+    </div>
+    <div class="hint">
+      用浏览器自带的弹窗校验（HTTP Basic）。用户名固定为 <span class="mono">admin</span>，你只需要记住口令。<br>
+      启用后，手机上填服务器地址、生成授权码都不受影响 —— <b>只有管理页需要口令</b>。
+    </div>
+    <div id="pw-msg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
+  <div class="card">
+    <h2>📱 手机要填的服务器地址</h2>
+    <div id="addr">读取中…</div>
+    <div class="hint" id="addr-hint">
+      手机与电脑必须在<b>同一个网络</b>。<br />
+      电脑<b>连手机热点</b>也可以 —— 只要两者在同一网段就行。<br />
+      在下面选 <b>你正在用的那个网络</b> 对应的地址，填进 App 的「设置 → 管理服务器」。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>👥 用户列表 <span class="pill no" id="cnt">0</span></h2>
+    <div class="row" style="margin-bottom:10px">
+      <input type="text" id="search" placeholder="搜索学号 / 姓名" oninput="render()" />
+      <button class="ghost" onclick="loadUsers()">刷新</button>
+      <button class="ghost" onclick="exportJson()">导出备份</button>
+    </div>
+    <div id="list"></div>
+  </div>
+
+  <div class="card">
+    <div class="warnbox" id="sec-note">
+      ⚠️ 数据以明文存在 <span class="mono">server/data.json</span>。这套东西是<b>局域网自用</b>规模，
+      没有登录鉴权、没有加密。<b>不要直接暴露到公网</b>；真要放公网，必须先加一层登录。
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── 如果是用文件打开的，直接拦下来并说明正确做法 ──
+// 从 file:// 打开的页面调用 http:// 接口会被浏览器拦（Failed to fetch），
+// 与其让用户对着"读取失败"发呆，不如直接告诉他是打开方式的问题。
+if (location.protocol === 'file:') {
+  document.getElementById('main-wrap').style.display = 'none';
+  document.getElementById('file-warn').style.display = 'block';
+  // 让链接指向本机默认端口
+  document.getElementById('file-warn-link').href = 'http://127.0.0.1:8787/admin';
+  document.getElementById('file-warn-link').textContent = 'http://127.0.0.1:8787/admin';
+}
+
+// 管理页与 server 同源，用相对路径即可
+const API = '';
+
+let users = [];
+
+function toast(t){
+  const el = document.getElementById('toast');
+  el.textContent = t;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>el.classList.remove('show'), 1800);
+}
+
+async function api(path, opts){
+  let res;
+  try {
+    res = await fetch(API + path, opts);
+  } catch (e) {
+    // 浏览器把"连不上"统一报成 Failed to fetch —— 换成能看懂的话
+    throw new Error('连不上后台服务。请确认「LifeKit 管理服务」那个窗口还开着。');
+  }
+  const j = await res.json().catch(()=>({}));
+  if(!res.ok || j.ok === false) throw new Error(j.error || ('HTTP ' + res.status));
+  return j;
+}
+
+function fmtTime(ms){
+  if(!ms) return '—';
+  const d = new Date(ms);
+  const p = n => String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+
+/**
+ * 生成授权码：输入学号 → 服务器签发一份绑定该学号的码。
+ *
+ * ⚠️ 生成的码必须由**服务器**签发，不能网页本地拼：
+ *    App 校验用的是 src/domain/licenseCode.ts 里的算法，
+ *    服务端的 server/licenseCode.cjs 与它**逐字节验证过一致**（有跨端测试守着）。
+ *    网页本地再写一份实现，迟早会跟 App 漂移，那时下发的码在 App 里会"无效"，
+ *    而这种问题只表现为一句"授权码无效"，极难定位。
+ */
+/**
+ * 把 datetime-local 的值转成时间戳。
+ * 空 → null（= 永久）。
+ *
+ * ⚠️ 顺手在这里挡住"设成过去" —— 服务端也会拒，
+ *    但界面上先拦一道，能省一次往返、提示也更清楚。
+ */
+function readExpiryInput(){
+  const el = document.getElementById('issue-exp');
+  const v = (el?.value ?? '').trim();
+  if(!v) return { ok: true, value: null };
+  const t = new Date(v).getTime();
+  if(!Number.isFinite(t)) return { ok: false, error: '截止时间格式不对' };
+  // 留 60 秒容差，避免"刚好点到现在"被误拒（与服务端规则一致）
+  if(t < Date.now() - 60000) return { ok: false, error: '截止时间不能是过去的时间' };
+  return { ok: true, value: t };
+}
+
+/** 次数：空 → null（不限） */
+function readMaxUsesInput(){
+  const el = document.getElementById('issue-max');
+  const v = (el?.value ?? '').trim();
+  if(!v) return { ok: true, value: null };
+  const n = Number(v);
+  if(!Number.isInteger(n) || n <= 0) return { ok: false, error: '次数必须是正整数' };
+  if(n > 100000) return { ok: false, error: '次数最多 100000' };
+  return { ok: true, value: n };
+}
+
+/** 清空生成表单（含配额输入） */
+function resetIssueForm(){
+  for(const id of ['issue-sid','issue-name','issue-exp','issue-max']){
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  }
+  document.getElementById('issue-result').innerHTML = '';
+}
+
+/**
+ * 配额的展示文案。
+ *   null 的两个维度都显示成"永久 / 不限"，让默认状态一眼可读。
+ */
+function fmtQuota(u){
+  const exp = typeof u.codeExpiresAt === 'number' ? u.codeExpiresAt : null;
+  const max = typeof u.maxUses === 'number' && u.maxUses > 0 ? u.maxUses : null;
+  const used = typeof u.usedCount === 'number' ? u.usedCount : 0;
+
+  let expTxt;
+  if(!exp){
+    expTxt = '永久有效';
+  }else{
+    const left = exp - Date.now();
+    expTxt = '截止 ' + fmtTime(exp) + (left > 0 ? '' : '（已过期）');
+  }
+
+  const useTxt = max === null ? `不限次（已用 ${used}）` : `${used}/${max} 次`;
+  return expTxt + '　·　' + useTxt;
+}
+
+/**
+ * 把 datetime-local 需要的本地时间串转出来（YYYY-MM-DDTHH:mm）。
+ * 直接 toISOString 会变成 UTC，填进去会差 8 小时 —— 这种坑很难发现。
+ */
+function toLocalInputValue(ts){
+  if(typeof ts !== 'number') return '';
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+    'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+/** 从 datetime-local 的值取时间戳（给用户列表的逐行编辑用） */
+function parseLocalInputValue(v){
+  const s = String(v ?? '').trim();
+  if(!s) return null;
+  const t = new Date(s).getTime();
+  return Number.isFinite(t) ? t : NaN;
+}
+
+async function doIssue(){
+  const sid = document.getElementById('issue-sid').value.trim();
+  const name = document.getElementById('issue-name').value.trim();
+  const box = document.getElementById('issue-result');
+  const btn = document.getElementById('issue-btn');
+
+  if(!sid){ toast('请先填学号'); return; }
+
+  const exp = readExpiryInput();
+  if(!exp.ok){ toast(exp.error); return; }
+  const mx = readMaxUsesInput();
+  if(!mx.ok){ toast(mx.error); return; }
+
+  btn.disabled = true;
+  btn.textContent = '生成中…';
+  box.innerHTML = '';
+  try{
+    const j = await api('/api/issue', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        studentId: sid,
+        studentName: name,
+        // ⚠️ 必须显式传（哪怕 null）——否则服务端会沿用这个人上次的设置
+        expiresAt: exp.value,
+        maxUses: mx.value,
+      }),
+    });
+    const u = j.user || {};
+    const quotaTxt = fmtQuota(u);
+    box.innerHTML =
+      '<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:10px;padding:14px">' +
+        '<div style="color:#065f46;font-size:13px;margin-bottom:8px">' +
+          (j.reused ? '这个学号之前已经签发过，下面是他原有的码（可直接复用）' : '✅ 已生成，把它发给对方') +
+        '</div>' +
+        '<div class="mono" id="issued-code" style="font-size:18px;font-weight:700;letter-spacing:1px;' +
+          'word-break:break-all;color:#065f46">' + escapeHtml(j.code) + '</div>' +
+        '<div style="color:#065f46;font-size:12px;margin-top:8px">学号：' +
+          escapeHtml(j.studentId) + (u.studentName ? '　姓名：' + escapeHtml(u.studentName) : '') +
+        '</div>' +
+        '<div style="color:#065f46;font-size:12px;margin-top:4px">' + escapeHtml(quotaTxt) + '</div>' +
+        '<div style="margin-top:12px">' +
+          '<button class="tiny" onclick="copyCode()">复制授权码</button> ' +
+          '<button class="tiny ghost" onclick="resetIssueForm()">继续生成下一个</button>' +
+        '</div>' +
+      '</div>';
+    void loadUsers();
+  }catch(e){
+    box.innerHTML = '<div style="color:#dc2626;font-size:13px">失败：' + escapeHtml(e.message) + '</div>';
+  }finally{
+    btn.disabled = false;
+    btn.textContent = '生成';
+  }
+}
+
+/** 复制已生成的授权码 */
+function copyCode(){
+  const el = document.getElementById('issued-code');
+  if(!el) return;
+  const text = el.textContent || '';
+  // navigator.clipboard 在 http:// 下可能不可用，做个兜底
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(()=>toast('已复制'), ()=>fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+function fallbackCopy(text){
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try{ document.execCommand('copy'); toast('已复制'); }
+  catch{ toast('复制失败，请手动选中复制'); }
+  document.body.removeChild(ta);
+}
+
+/**
+ * ── 万能码的显示策略 ──
+ *
+ * ══════════════ 为什么默认遮挡 ══════════════
+ * 万能码能改**所有人**的签到状态。它原先在三个地方明文出现：
+ *   ① 输入框（type=text）
+ *   ② 顶部概览卡片
+ *   ③ "最近修改"历史（连旧的都列出来）
+ * 任何一个被旁边人瞄一眼、或被截图发出去，就等于漏了。
+ *
+ * 现在：输入框遮挡 + 概览只显示"已设置" + 历史只显示长度与首尾。
+ */
+async function loadMaster(){
+  try{
+    const j = await api('/api/master');
+    /**
+     * ⚠️ 服务端**不再回传万能码明文**（它现在只存哈希）。
+     *    所以这里读不到值，输入框留空，等你输入新码。
+     *    概览卡片也只显示"已设置"。
+     */
+    const input = document.getElementById('master');
+    if(input) input.value = '';
+    const stat = document.getElementById('stat-code');
+    if(stat) stat.textContent = j.hasMasterCode ? '已设置' : '未设置';
+  }catch(e){
+    const stat = document.getElementById('stat-code');
+    if(stat) stat.textContent = '读取失败';
+    toast('读万能码状态失败：' + e.message);
+  }
+}
+
+/** 显示 / 隐藏万能码 */
+function toggleMaster(){
+  const el = document.getElementById('master');
+  const btn = document.getElementById('master-eye');
+  if(!el || !btn) return;
+  const hidden = el.type === 'password';
+  el.type = hidden ? 'text' : 'password';
+  btn.textContent = hidden ? '🙈 隐藏' : '👁 显示';
+}
+
+/** 只露首尾，用于历史记录 —— 既知道改过，又不完整暴露 */
+function maskCode(s){
+  const v = String(s ?? '');
+  if(!v) return '（空）';
+  if(v.length <= 4) return v[0] + '***';
+  return v.slice(0, 2) + '***' + v.slice(-2);
+}
+
+async function saveMaster(){
+  const v = document.getElementById('master').value.trim();
+  if(!v) return toast('万能码不能为空');
+  try{
+    await api('/api/master', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ masterCode: v }),
+    });
+    // ⚠️ 提示里**不回显**新码
+    toast('万能码已更新（内容不回显）');
+    // 存完立刻清空并遮回去 —— 别让新码留在页面上
+    const el = document.getElementById('master');
+    if(el){ el.value = ''; el.type = 'password'; }
+    const btn = document.getElementById('master-eye');
+    if(btn) btn.textContent = '👁 显示';
+    loadMaster();
+    loadHist();
+  }catch(e){ toast('保存失败：' + e.message); }
+}
+
+/**
+ * 历史记录：只显示"什么时候改过、长度是多少"。
+ *
+ * ⚠️ 服务端现在**历史里也不存明文**了（只记 fromLen/toLen）——
+ *    因为很多人会复用旧码，把历史明文留在磁盘上等于把用过的码全暴露。
+ *    这里保留对旧格式（from/to）的兼容，以便老数据文件还能显示。
+ */
+async function loadHist(){
+  try{
+    const j = await api('/api/export');
+    const h = (j.db.masterCodeHistory || []).slice(0, 8);
+    if(!h.length){ document.getElementById('hist').innerHTML = ''; return; }
+    const fmtLen = (n) => (typeof n === 'number' ? n + ' 位' : '');
+    document.getElementById('hist').innerHTML =
+      '<div style="margin-top:10px">最近修改（只记时间与长度，不存内容）：</div>' +
+      h.map(x => {
+        // 新格式：fromLen/toLen；旧格式：from/to（打码显示）
+        const from = typeof x.fromLen === 'number' ? fmtLen(x.fromLen) : escapeHtml(maskCode(x.from));
+        const to = typeof x.toLen === 'number' ? fmtLen(x.toLen) : escapeHtml(maskCode(x.to));
+        return '<div>· ' + fmtTime(x.at) + '　' + from + ' → <b>' + to + '</b></div>';
+      }).join('');
+  }catch{}
+}
+
+async function loadUsers(){
+  try{
+    const j = await api('/api/users');
+    users = j.users || [];
+    document.getElementById('cnt').textContent = j.count + ' 人';
+    document.getElementById('stat-total').textContent = j.count;
+    document.getElementById('stat-auth').textContent = j.authorizedCount;
+    render();
+  }catch(e){
+    document.getElementById('list').innerHTML =
+      '<div class="empty">读不到用户列表：' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function render(){
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const list = users.filter(u =>
+    !q || String(u.studentId).toLowerCase().includes(q) || String(u.studentName||'').toLowerCase().includes(q));
+
+  const box = document.getElementById('list');
+  if(!list.length){
+    box.innerHTML = '<div class="empty">' + (users.length ? '没有匹配的用户' : '还没有用户登录过') + '</div>';
+    return;
+  }
+
+  box.innerHTML = '<table><thead><tr>' +
+    '<th>学号</th><th>姓名</th><th>授权</th><th>授权码</th><th>生效时间 / 次数</th><th>最近登录</th><th>登录数</th><th>备注</th><th></th>' +
+    '</tr></thead><tbody>' +
+    list.map(u => `
+      <tr data-id="${escapeHtml(u.studentId)}">
+        <td class="mono">${escapeHtml(u.studentId)}</td>
+        <td><input type="text" class="tiny-name" data-id="${escapeHtml(u.studentId)}" value="${escapeHtml(u.studentName)}"
+             style="width:92px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fbfbfd" /></td>
+        <td>
+          <span class="pill ${u.authorized ? 'ok' : 'no'}" style="cursor:pointer"
+                onclick="toggleAuth('${escapeHtml(u.studentId)}', ${u.authorized ? 'false' : 'true'})">
+            ${u.authorized ? '已授权' : '未授权'}
+          </span>
+        </td>
+        <td>
+          <input type="text" class="tiny-code" data-id="${escapeHtml(u.studentId)}" value="${escapeHtml(u.code)}"
+                 placeholder="可留空" style="width:150px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fbfbfd" />
+          <div style="font-size:11px;color:#6b7280;margin-top:3px">
+            ${u.issuedByAdmin ? '管理员签发' : u.grantedByMaster ? '万能码领取' : '未签发'}
+          </div>
+        </td>
+        <td>
+          <!--
+            ★ 截止时间用 datetime-local（带时分），**不是 date** ——
+            用 date 只能选到"天"，而边界情况（今天到期）判断不了。
+            ⚠️ 值必须用**本地时间**串，不能用 toISOString（那是 UTC，会差 8 小时）。
+          -->
+          <input type="datetime-local" class="tiny-exp" data-id="${escapeHtml(u.studentId)}"
+                 value="${toLocalInputValue(u.codeExpiresAt)}"
+                 title="留空 = 永久有效"
+                 style="width:186px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fbfbfd" />
+          <div style="display:flex;align-items:center;gap:5px;margin-top:4px">
+            <input type="number" class="tiny-max" data-id="${escapeHtml(u.studentId)}" min="1" max="100000"
+                   value="${typeof u.maxUses === 'number' && u.maxUses > 0 ? u.maxUses : ''}"
+                   placeholder="不限"
+                   title="可用次数，留空 = 不限次"
+                   style="width:74px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fbfbfd" />
+            <span style="font-size:11px;color:#6b7280">次，已用 ${u.usedCount ?? 0}</span>
+          </div>
+          <div style="font-size:11px;color:#6b7280;margin-top:3px">${escapeHtml(fmtQuota(u))}</div>
+        </td>
+        <td>${u.lastLoginAt ? fmtTime(u.lastLoginAt) : '<span style="color:#9ca3af">还没登录过</span>'}</td>
+        <td>${u.loginCount ?? 0}</td>
+        <td><input type="text" class="tiny-note" data-id="${escapeHtml(u.studentId)}" value="${escapeHtml(u.note)}"
+             placeholder="备注" style="width:110px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fbfbfd" /></td>
+        <td style="white-space:nowrap">
+          <button class="tiny" onclick="saveRow('${escapeHtml(u.studentId)}')">保存</button>
+          <button class="tiny ghost" onclick="resetUsed('${escapeHtml(u.studentId)}')" title="把已用次数清零，重新给额度">次数清零</button>
+          <button class="tiny danger" onclick="delUser('${escapeHtml(u.studentId)}')">删除</button>
+        </td>
+      </tr>`).join('') +
+    '</tbody></table>';
+}
+
+/** 把某个学号的已用次数清零（重新给额度） */
+async function resetUsed(id){
+  if(!confirm('把「' + id + '」的已用次数清零？\n（有效期与次数上限不变，只是重新给满额度）')) return;
+  try{
+    await api('/api/user/update', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ studentId: id, resetUsed: true }) });
+    toast('已清零，可重新使用');
+    loadUsers();
+  }catch(e){ toast('失败：' + e.message); }
+}
+
+async function toggleAuth(id, next){
+  try{
+    await api('/api/user/update', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ studentId:id, authorized: next === true || next === 'true' }) });
+    toast(next === true || next === 'true' ? '已授权' : '已取消授权');
+    loadUsers();
+  }catch(e){ toast('失败：' + e.message); }
+}
+
+async function saveRow(id){
+  const sel = (cls) => document.querySelector('.' + cls + '[data-id="' + CSS.escape(id) + '"]');
+  const name = sel('tiny-name').value;
+  const code = sel('tiny-code').value;
+  const expRaw = sel('tiny-exp').value;
+  const maxRaw = sel('tiny-max').value.trim();
+  const note = sel('tiny-note').value;
+
+  /**
+   * ⚠️ 截止时间现在是 datetime-local（带时分），**直接解析**即可。
+   *    原先用 `<input type=date>`，代码里补 'T23:59:59' 当成当天结束 ——
+   *    那个补法本身没错，但只能精确到"天"，边界情况没法处理。
+   *    而且旧写法用了 toISOString（UTC）回填，在中国会差 8 小时。
+   */
+  const codeExpiresAt = parseLocalInputValue(expRaw);
+  if(Number.isNaN(codeExpiresAt)){
+    toast('截止时间格式不对'); return;
+  }
+  // 界面上先挡一道"不能设成过去"（服务端也会拒，这里提示更清楚）
+  if(codeExpiresAt !== null && codeExpiresAt < Date.now() - 60000){
+    toast('截止时间不能是过去的时间'); return;
+  }
+
+  // 次数：空 = 不限
+  let maxUses = null;
+  if(maxRaw){
+    const n = Number(maxRaw);
+    if(!Number.isInteger(n) || n <= 0){ toast('次数必须是正整数'); return; }
+    if(n > 100000){ toast('次数最多 100000'); return; }
+    maxUses = n;
+  }
+
+  try{
+    await api('/api/user/update', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ studentId:id, studentName:name, code, codeExpiresAt, maxUses, note }) });
+    toast('已保存 ' + id);
+    loadUsers();
+  }catch(e){ toast('保存失败：' + e.message); }
+}
+
+async function delUser(id){
+  if(!confirm('确定删除 ' + id + '？此操作不可撤销。')) return;
+  try{
+    await api('/api/user/delete', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ studentId:id }) });
+    toast('已删除 ' + id);
+    loadUsers();
+  }catch(e){ toast('删除失败：' + e.message); }
+}
+
+async function exportJson(){
+  try{
+    const j = await api('/api/export');
+    const blob = new Blob([JSON.stringify(j.db, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'lifekit-users-' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('已导出');
+  }catch(e){ toast('导出失败：' + e.message); }
+}
+
+/**
+ * ── 管理口令 ──
+ *
+ * ══════════ 为什么这个很重要 ══════════
+ * 服务监听 0.0.0.0，同一个 WiFi 下**任何人都能打开这个页面** ——
+ * 看到所有人的学号、改万能码、把人踢下线。
+ * 十几到几十个人用的时候，这不可接受。
+ *
+ * 启用后走浏览器自带的 HTTP Basic 弹窗，用户名固定 admin。
+ */
+async function loadPasswordState(){
+  try{
+    const j = await api('/api/admin/password');
+    const on = Boolean(j.enabled);
+    const pill = document.getElementById('pw-state');
+    pill.textContent = on ? '已启用' : '未启用';
+    pill.className = 'pill ' + (on ? 'ok' : 'no');
+    document.getElementById('pw-warn').style.display = on ? 'none' : 'block';
+    document.getElementById('pw-input').placeholder = on
+      ? '输入新口令（会替换当前的）'
+      : '设置一个口令（至少 4 位）';
+    document.getElementById('pw-btn').textContent = on ? '修改口令' : '启用口令';
+    document.getElementById('pw-clear-btn').style.display = on ? 'inline-block' : 'none';
+  }catch(e){
+    document.getElementById('pw-msg').innerHTML =
+      '<span style="color:#dc2626">读不到口令状态：' + escapeHtml(e.message) + '</span>';
+  }
+}
+
+async function savePassword(){
+  const v = document.getElementById('pw-input').value.trim();
+  if(v.length < 4){ toast('口令至少 4 位'); return; }
+  try{
+    await api('/api/admin/password', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: v }),
+    });
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-msg').innerHTML =
+      '<span style="color:#059669">✅ 已启用。下次打开管理页会弹出输入框，用户名 admin。</span>';
+    loadPasswordState();
+  }catch(e){
+    document.getElementById('pw-msg').innerHTML =
+      '<span style="color:#dc2626">失败：' + escapeHtml(e.message) + '</span>';
+  }
+}
+
+async function clearPassword(){
+  if(!confirm('确定关闭口令？关闭后同一 WiFi 下任何人都能打开这个页面。')) return;
+  try{
+    await api('/api/admin/password', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: '' }),
+    });
+    document.getElementById('pw-msg').innerHTML =
+      '<span style="color:#d97706">已关闭口令保护。</span>';
+    loadPasswordState();
+  }catch(e){
+    document.getElementById('pw-msg').innerHTML =
+      '<span style="color:#dc2626">失败：' + escapeHtml(e.message) + '</span>';
+  }
+}
+
+/**
+ * ── 手机要填的服务器地址 ──
+ *
+ * ══════════ 两种部署模式，显示内容不同 ══════════
+ * ① 云端（阿里云/腾讯云等）：ping 会返回 cloud:true。
+ *    这时**不该列出局域网 IP** —— 那些地址在外面根本访问不到，
+ *    列出来只会让人填错。正确做法是显示**浏览器正在用的这个地址**
+ *    （用户能打开这个页面，说明这个域名/IP 就是通的）。
+ *
+ * ② 本地（自己电脑上跑）：列出口网卡地址，让用户挑正在用的那个。
+ *
+ * ⚠️ 踩过的坑：云端部署后这一栏显示的是 `172.17.23.121`（私有 IP），
+ *    用户照它填进 App，结果永远连不上，而且完全看不出哪里错。
+ */
+async function loadAddr(){
+  try{
+    const j = await api('/api/ping');
+    const box = document.getElementById('addr');
+    const hint = document.getElementById('addr-hint');
+
+    // ── 云端模式 ──
+    if(j.cloud){
+      const here = location.origin; // 例：http://<你的服务器>:8787
+      box.innerHTML =
+        '<div class="addr" style="background:#d1fae5">' +
+          '<b>' + escapeHtml(here) + '</b>' +
+          '<span style="color:#6b7280;font-size:12px">　★ 云端（永久在线）</span>' +
+        '</div>';
+      hint.innerHTML =
+        '这台服务跑在云上，<b>任何人任何网络都能访问</b>。<br />' +
+        '上面这个地址就是能用的那个 —— 填进 App 的「设置 → 管理服务器」。<br />' +
+        '<b>通常不需要手填</b>：如果 App 把地址写进了默认值，装上就是好的。';
+      // 云端时安全说明也要跟着变（下面那段"局域网自用"的话在云端是错的）
+      const sec = document.getElementById('sec-note');
+      if(sec){
+        sec.innerHTML =
+          'ℹ️ 这套服务开在公网上。当前保护：<b>管理页有口令</b>，' +
+          'App 接口无需口令（凭据放进 APK 等于公开，加了没意义）。<br />' +
+          '⚠️ 传输是 <b>明文 HTTP</b>：同一网络下抓包能看到口令与学号。' +
+          '想更安全需要域名 + HTTPS（国内域名要备案）。<br />' +
+          '✅ 数据存在 <span class="mono">/opt/lifekit/data.json</span>，建议定期「导出备份」。';
+      }
+      return;
+    }
+
+    // ── 本地模式 ──
+    const detail = j.addressesDetail || (j.addresses || []).map(a => ({ address: a, kind: '' }));
+    if(!detail.length){
+      box.innerHTML =
+        '<div style="color:#92400e">⚠️ 没检测到局域网地址 —— 电脑似乎没连网络。请先让电脑入网。</div>';
+      return;
+    }
+    box.innerHTML = detail.map(d => {
+      const url = 'http://' + d.address + ':' + j.port;
+      const hot = String(d.kind || '').startsWith('★');
+      return '<div class="addr" style="margin-bottom:6px' + (hot ? ';background:#d1fae5' : '') + '">' +
+        '<b>' + escapeHtml(url) + '</b>' +
+        '<span style="color:#6b7280;font-size:12px">　' + escapeHtml(d.kind || '局域网') + '</span>' +
+        '</div>';
+    }).join('');
+  }catch(e){
+    document.getElementById('addr').textContent = '读取失败：' + e.message;
+  }
+}
+
+loadMaster();
+loadUsers();
+loadHist();
+loadAddr();
+loadPasswordState();
+setInterval(loadUsers, 15000); // 每 15 秒自动刷新一次用户列表
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "note": "已知的历史遗留未使用变量；新增的会被 check-dead-code.cjs 拦下",
+  "keys": [
+    "src/domain/licenseCode.ts::PAYLOAD_SEGS",
+    "src/modules/CheckinModule.tsx::Set",
+    "src/modules/CheckinModule.tsx::SignState",
+    "src/modules/CheckinModule.tsx::r",
+    "src/nav/screens.tsx::params",
+    "src/screens/checkin-manual.tsx::All imports in import declaration are unused.",
+    "src/screens/checkin-manual.tsx::radius",
+    "src/screens/profile.tsx::Divider",
+    "src/screens/schedule.tsx::Divider",
+    "src/screens/settings.tsx::CODE_PREFIX",
+    "src/screens/settings.tsx::Field",
+    "src/screens/settings.tsx::setServerBase",
+    "src/screens/settings.tsx::statusMeta",
+    "src/screens/tab-food.tsx::router",
+    "src/screens/youxue-web-login.tsx::Col",
+    "src/services/checkin/youxueAdapter.ts::credRef",
+    "src/services/delivery/parser.ts::platform",
+    "src/state/moduleStore.tsx::useCallback"
+  ]
+}

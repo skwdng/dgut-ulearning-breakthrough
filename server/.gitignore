@@ -1,0 +1,3 @@
+# 忽略管理服务的数据文件（含学号姓名，不入库）
+server/data.json
+server/data.json.tmp

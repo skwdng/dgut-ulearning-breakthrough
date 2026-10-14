@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LifeKit 授权码管理</title>
+<style>
+  :root {
+    --primary: #6366F1;
+    --primary-dark: #4F46E5;
+    --primary-soft: #EEF2FF;
+    --text: #111827;
+    --muted: #6B7280;
+    --border: #E5E7EB;
+    --bg: #F9FAFB;
+    --card: #FFFFFF;
+    --green: #10B981;
+    --green-soft: #ECFDF5;
+    --red: #EF4444;
+    --red-soft: #FEF2F2;
+    --amber: #F59E0B;
+    --amber-soft: #FFFBEB;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  header { margin-bottom: 20px; }
+  h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 16px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px;
+  }
+  .card .hint { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+
+  label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: #374151; }
+  input[type="text"], input[type="date"] {
+    width: 100%;
+    padding: 11px 13px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font-size: 15px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--text);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+  }
+  .field { margin-bottom: 14px; }
+  .row { display: flex; gap: 12px; }
+  .row > * { flex: 1; }
+
+  button {
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 500;
+    padding: 11px 18px;
+    border-radius: 9px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background .15s, transform .06s;
+  }
+  button:active { transform: scale(.985); }
+  .btn-primary { background: var(--primary); color: #fff; width: 100%; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-ghost {
+    background: #fff; color: var(--muted); border-color: var(--border);
+    font-size: 13px; padding: 7px 12px;
+  }
+  .btn-ghost:hover { background: var(--bg); color: var(--text); }
+  .btn-danger { background: #fff; color: var(--red); border-color: #FECACA; font-size: 13px; padding: 7px 12px; }
+  .btn-danger:hover { background: var(--red-soft); }
+
+  /* 结果区 */
+  #result { display: none; margin-top: 4px; }
+  .code-box {
+    background: var(--primary-soft);
+    border: 1px solid #C7D2FE;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+  .code-label { font-size: 12px; color: var(--primary-dark); margin-bottom: 8px; font-weight: 500; }
+  .code-value {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    color: var(--primary-dark);
+    word-break: break-all;
+    line-height: 1.5;
+  }
+  .code-meta { font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .code-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+
+  /* 错误/提示 */
+  .msg { padding: 11px 14px; border-radius: 9px; font-size: 14px; margin-top: 12px; display: none; }
+  .msg.err { background: var(--red-soft); color: #B91C1C; border: 1px solid #FECACA; }
+  .msg.ok  { background: var(--green-soft); color: #047857; border: 1px solid #A7F3D0; }
+
+  /* 列表 */
+  .list-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+  }
+  .list-head h2 { margin: 0; }
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 24px 0; }
+
+  .item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .item:last-child { border-bottom: none; }
+  .item-main { flex: 1; min-width: 0; }
+  .item-name { font-weight: 500; margin-bottom: 3px; }
+  .item-sid { font-size: 13px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
+  .item-code {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12.5px; color: var(--primary-dark);
+    background: var(--primary-soft); padding: 3px 7px; border-radius: 5px;
+    display: inline-block; margin-top: 5px; word-break: break-all;
+  }
+  .item-side { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex-shrink: 0; }
+  .badge {
+    font-size: 11.5px; padding: 2px 8px; border-radius: 999px; font-weight: 500; white-space: nowrap;
+  }
+  .badge.ok { background: var(--green-soft); color: #047857; }
+  .badge.exp { background: var(--amber-soft); color: #B45309; }
+  .badge.permanent { background: #F3F4F6; color: var(--muted); }
+
+  .tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+  footer { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 28px; line-height: 1.7; }
+  .warn {
+    background: var(--amber-soft); border: 1px solid #FDE68A; color: #92400E;
+    border-radius: 9px; padding: 12px 14px; font-size: 13px; margin-top: 12px;
+  }
+  @media (max-width: 520px) {
+    .row { flex-direction: column; gap: 0; }
+    h1 { font-size: 21px; }
+    .code-value { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>LifeKit 授权码管理</h1>
+    <p class="sub">填写姓名与学号，自动生成该账号专属的签到插件授权码</p>
+  </header>
+
+  <div class="card">
+    <h2>① 生成授权码</h2>
+    <p class="hint">授权码与学号绑定 —— 别人拿到码也用不了。</p>
+
+    <div class="row">
+      <div class="field">
+        <label for="name">姓名</label>
+        <input type="text" id="name" placeholder="同学A" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="sid">学号</label>
+        <input type="text" id="sid" placeholder="8-12 位数字" autocomplete="off" inputmode="numeric">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="exp">有效期（留空 = 永久）</label>
+      <input type="date" id="exp">
+    </div>
+
+    <button class="btn-primary" id="gen">生成授权码</button>
+    <div class="msg" id="msg"></div>
+
+    <div id="result">
+      <div class="code-box">
+        <div class="code-label" id="code-label">授权码</div>
+        <div class="code-value" id="code-value"></div>
+        <div class="code-meta" id="code-meta"></div>
+        <div class="code-actions">
+          <button class="btn-ghost" id="copy">复制</button>
+          <button class="btn-ghost" id="save">保存到列表</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>①.5 万能码</h2>
+    <p class="hint">
+      不绑定学号 —— <b>任何人</b>在设置里输入都能解锁签到插件。<br>
+      用于自己调试、或临时给某个人开放。<b>不要公开发出去</b>，否则等于所有人都能解锁。
+    </p>
+    <p class="hint" style="background:#fffbeb;border:1px dashed #fcd34d;border-radius:8px;padding:10px;color:#92400e">
+      <b>另有一个便利万能码（内置码）</b><br>
+      直接输入即可解锁，不用生成。它写在 App 代码里（不经过算法），所以算法生成的码永远不会和它重复。<br>
+      值由打包时的 <code>EXPO_PUBLIC_MASTER_CODE</code> 决定 —— <b>公开仓库里没有这个值</b>，
+      自建时自己设一个。<br>
+      大小写、空格、横线都认（大小写与分隔符不敏感）。
+    </p>
+    <div class="field">
+      <label for="master-exp">有效期（留空 = 永久，建议设一个到期日）</label>
+      <input type="date" id="master-exp">
+    </div>
+    <button id="gen-master" style="width:100%;padding:12px;border-radius:10px;border:1px dashed #f59e0b;background:#fffbeb;color:#b45309;font-size:15px;font-weight:600;cursor:pointer">
+      生成万能码
+    </button>
+    <div id="master-result" style="display:none;margin-top:14px">
+      <div class="code-box" style="border-color:#fcd34d;background:#fffbeb">
+        <div class="code-label" style="color:#b45309">万能码</div>
+        <div class="code-value" id="master-value"></div>
+        <div class="code-meta" id="master-meta"></div>
+        <div class="code-actions">
+          <button class="btn-ghost" id="master-copy">复制</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="list-head">
+      <h2>② 已生成的码</h2>
+      <span class="badge permanent" id="count">0 条</span>
+    </div>
+    <div id="list"><div class="empty">还没有生成过</div></div>
+    <div class="tools">
+      <button class="btn-ghost" id="export">导出 JSON</button>
+      <button class="btn-ghost" id="import-btn">导入 JSON</button>
+      <input type="file" id="import-file" accept=".json" style="display:none">
+      <button class="btn-danger" id="clear">清空列表</button>
+    </div>
+    <div class="warn">
+      <strong>数据存在这个浏览器的 localStorage 里</strong>，换浏览器或清缓存就会丢。
+      重要的话定期用「导出 JSON」备份。
+    </div>
+  </div>
+
+  <footer>
+    授权码格式 <code>LK1-XXXXX-XXXXX-...</code> · 一码一人 · 可设有效期<br>
+    用户拿到码后，在 App 的「首页 → 设置」里填入即可解锁签到插件
+  </footer>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   授权码实现（与 App 端 src/domain/licenseCode.ts 完全一致）
+   ⚠️ 两边算法必须一致，否则 App 校验不过。
+   ══════════════════════════════════════════════════════════════ */
+
+const CODE_PREFIX = 'LK1';
+/* 万能码：独立前缀 + 独立密钥。
+   这样万一万能码流出，也无法据此推导普通码的签发方式，反之亦然。 */
+const MASTER_PREFIX = 'LKM';
+const MASTER_KEY = 'LifeKit::master::v1::2026';
+// ⚠️ 必须正好 32 个字符（5 位掩码 & 31 需要 32 个），去掉最易混的 0/1/I/O
+const B32 = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+if (B32.length !== 32) throw new Error('B32 长度必须是 32，当前 ' + B32.length);
+const SIGN_KEY = 'LifeKit::checkin::v1::2026';
+const SEG_LEN = 5;
+const PAYLOAD_BYTES = 8;
+const PAYLOAD_CHARS = Math.ceil(PAYLOAD_BYTES * 8 / 5); // 13
+const SIG_CHARS = SEG_LEN * 3;                          // 15
+const MASTER_PAYLOAD_BYTES = 3;
+const MASTER_PAYLOAD_CHARS = Math.ceil(MASTER_PAYLOAD_BYTES * 8 / 5); // 5
+
+function normalizeStudentId(s) { return (s ?? '').replace(/\s+/g, '').toLowerCase(); }
+
+function hashStudentId(studentId) {
+  const s = normalizeStudentId(studentId);
+  const fnv = (seed) => {
+    let h = seed >>> 0;
+    for (let i = 0; i < s.length; i += 1) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h >>> 0;
+  };
+  return fnv(0x811c9dc5).toString(16).padStart(8, '0')
+       + fnv(0x9e3779b9).toString(16).padStart(8, '0');
+}
+
+/** 字节 → Base32（每次只累积 1 字节，避免 bits>31 时 >>> 溢出） */
+function toBase32(bytes) {
+  let bits = 0, acc = 0, out = '';
+  for (const b of bytes) {
+    acc = ((acc << 8) | (b & 0xff)) & 0xfff;
+    bits += 8;
+    while (bits >= 5) {
+      out += B32[(acc >>> (bits - 5)) & 31];
+      bits -= 5;
+      acc &= (1 << bits) - 1;
+    }
+  }
+  if (bits > 0) out += B32[(acc << (5 - bits)) & 31];
+  return out;
+}
+function hexToBytes(hex) {
+  const out = [];
+  for (let i = 0; i + 1 < hex.length; i += 2) out.push(parseInt(hex.slice(i, i + 2), 16));
+  return out;
+}
+function signWith(key, payloadStr) {
+  const raw = key + '|' + payloadStr;
+  return toBase32(hexToBytes(hashStudentId(raw) + hashStudentId(raw + '#2')));
+}
+function sign(payloadStr) { return signWith(SIGN_KEY, payloadStr); }
+function group(s) {
+  const p = [];
+  for (let i = 0; i < s.length; i += SEG_LEN) p.push(s.slice(i, i + SEG_LEN));
+  return p.join('-');
+}
+function expireDaysFrom(expiresAt) {
+  if (!expiresAt) return 0;
+  const EPOCH = Date.UTC(2026, 0, 1);
+  const d = Math.round((expiresAt - EPOCH) / 86400000);
+  if (d <= 0) return 1;
+  return Math.min(d, 0xffff);
+}
+function expireDaysTo(days) { return days ? Date.UTC(2026, 0, 1) + days * 86400000 : undefined; }
+
+function generateLicenseCode(studentId, options = {}) {
+  const sid = normalizeStudentId(studentId);
+  if (!sid) throw new Error('学号不能为空');
+  const hashBytes = hexToBytes(hashStudentId(sid)).slice(0, 6);
+  const days = expireDaysFrom(options.expiresAt);
+  const payloadStr = toBase32([...hashBytes, (days >> 8) & 0xff, days & 0xff]);
+  const sigStr = sign(payloadStr).slice(0, SIG_CHARS);
+  return CODE_PREFIX + '-' + group(payloadStr + sigStr);
+}
+
+/* 万能码：不绑学号，任何人输入都能解锁签到插件 */
+function generateMasterCode(options = {}) {
+  const days = expireDaysFrom(options.expiresAt);
+  const payloadStr = toBase32([0x4d, (days >> 8) & 0xff, days & 0xff]);
+  const sigStr = signWith(MASTER_KEY, payloadStr).slice(0, SIG_CHARS);
+  return MASTER_PREFIX + '-' + group(payloadStr + sigStr);
+}
+
+function parseLicenseCode(input) {
+  const raw = (input ?? '').replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+  if (!raw) return { ok: false, reason: 'empty' };
+
+  // 万能码先判
+  if (raw.startsWith(MASTER_PREFIX)) {
+    const mbody = raw.slice(MASTER_PREFIX.length);
+    if (mbody.length !== MASTER_PAYLOAD_CHARS + SIG_CHARS) return { ok: false, reason: 'length' };
+    const mPayload = mbody.slice(0, MASTER_PAYLOAD_CHARS);
+    const mSig = mbody.slice(MASTER_PAYLOAD_CHARS);
+    if (signWith(MASTER_KEY, mPayload).slice(0, SIG_CHARS) !== mSig) return { ok: false, reason: 'signature' };
+    const mb = fromBase32(mPayload, MASTER_PAYLOAD_BYTES);
+    if (mb[0] !== 0x4d) return { ok: false, reason: 'signature' };
+    const mdays = ((mb[1] ?? 0) << 8) | (mb[2] ?? 0);
+    return { ok: true, info: { studentIdHash: '', expiresAt: expireDaysTo(mdays), isMaster: true } };
+  }
+
+  if (!raw.startsWith(CODE_PREFIX)) return { ok: false, reason: 'prefix' };
+  const body = raw.slice(CODE_PREFIX.length);
+  if (body.length !== PAYLOAD_CHARS + SIG_CHARS) return { ok: false, reason: 'length' };
+  const payloadStr = body.slice(0, PAYLOAD_CHARS);
+  const sigStr = body.slice(PAYLOAD_CHARS);
+  if (sign(payloadStr).slice(0, SIG_CHARS) !== sigStr) return { ok: false, reason: 'signature' };
+  const pb = fromBase32(payloadStr, PAYLOAD_BYTES);
+  const hashHex = pb.slice(0, 6).map((b) => b.toString(16).padStart(2, '0')).join('');
+  const days = (pb[6] << 8) | pb[7];
+  return { ok: true, info: { studentIdHash: hashHex, expiresAt: expireDaysTo(days) } };
+}
+function fromBase32(s, n) {
+  let bits = 0, acc = 0;
+  const out = [];
+  for (const ch of s) {
+    const v = B32.indexOf(ch);
+    if (v < 0) continue;
+    acc = ((acc << 5) | v) & 0x3fff;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((acc >>> (bits - 8)) & 0xff);
+      bits -= 8;
+      acc &= (1 << bits) - 1;
+      if (out.length >= n) break;
+    }
+  }
+  return out;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   界面逻辑
+   ══════════════════════════════════════════════════════════════ */
+
+const STORE_KEY = 'lifekit.license.records.v1';
+const $ = (id) => document.getElementById(id);
+
+let pending = null;   // 刚生成、还没保存的码
+let masterCode = null; // 刚生成的万能码（不入列表，避免和一人一码混在一起）
+
+function loadRecords() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch { return []; }
+}
+function saveRecords(list) {
+  localStorage.setItem(STORE_KEY, JSON.stringify(list));
+}
+function showMsg(text, kind) {
+  const el = $('msg');
+  el.textContent = text;
+  el.className = 'msg ' + kind;
+  el.style.display = 'block';
+  clearTimeout(showMsg._t);
+  showMsg._t = setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+function fmtDate(ts) {
+  const d = new Date(ts);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+/* ── 生成 ── */
+$('gen').addEventListener('click', () => {
+  const name = $('name').value.trim();
+  const sid = $('sid').value.trim();
+  const expVal = $('exp').value;
+
+  if (!name) { showMsg('请填写姓名', 'err'); $('name').focus(); return; }
+  if (!sid) { showMsg('请填写学号', 'err'); $('sid').focus(); return; }
+  if (!/^[0-9A-Za-z]{4,32}$/.test(sid.replace(/\s/g, ''))) {
+    showMsg('学号格式看起来不对（应为 4~32 位字母数字）', 'err'); return;
+  }
+
+  let expiresAt;
+  if (expVal) {
+    expiresAt = new Date(expVal + 'T23:59:59').getTime();
+    if (expiresAt <= Date.now()) { showMsg('有效期必须晚于今天', 'err'); return; }
+  }
+
+  let code;
+  try {
+    code = generateLicenseCode(sid, { expiresAt });
+  } catch (e) {
+    showMsg('生成失败：' + e.message, 'err'); return;
+  }
+
+  const parsed = parseLicenseCode(code);
+  if (!parsed.ok) { showMsg('自检失败（' + parsed.reason + '），请反馈', 'err'); return; }
+
+  pending = {
+    name,
+    studentId: sid.replace(/\s/g, ''),
+    code,
+    expiresAt: parsed.info.expiresAt,
+    createdAt: Date.now(),
+  };
+
+  $('code-label').textContent = name + ' 的授权码';
+  $('code-value').textContent = code;
+  $('code-meta').textContent =
+    '学号 ' + pending.studentId + ' · ' +
+    (pending.expiresAt ? fmtDate(pending.expiresAt) + ' 到期' : '长期有效');
+  $('result').style.display = 'block';
+  $('code-value').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+/* ── 生成万能码 ── */
+$('gen-master').addEventListener('click', async () => {
+  const expVal = $('master-exp').value;
+  let expiresAt;
+  if (expVal) {
+    expiresAt = new Date(expVal + 'T23:59:59').getTime();
+    if (expiresAt <= Date.now()) { alert('有效期必须晚于今天'); return; }
+  }
+
+  let code;
+  try {
+    code = generateMasterCode({ expiresAt });
+  } catch (e) {
+    alert('生成失败：' + e.message);
+    return;
+  }
+
+  // 自检：生成的码必须能被解析回来，且标记为万能码
+  const parsed = parseLicenseCode(code);
+  if (!parsed.ok || !parsed.info.isMaster) {
+    alert('自检失败（' + (parsed.reason || '未标记为万能码') + '），请反馈');
+    return;
+  }
+
+  masterCode = code;
+  $('master-value').textContent = code;
+  $('master-meta').textContent =
+    parsed.info.expiresAt ? fmtDate(parsed.info.expiresAt) + ' 到期' : '长期有效（建议设个到期日）';
+  $('master-result').style.display = 'block';
+  $('master-value').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+$('master-copy').addEventListener('click', async () => {
+  if (!masterCode) return;
+  try {
+    await navigator.clipboard.writeText(masterCode);
+    $('master-copy').textContent = '已复制';
+  } catch {
+    $('master-copy').textContent = '复制失败';
+  }
+  setTimeout(() => { $('master-copy').textContent = '复制'; }, 1400);
+});
+
+/* ── 复制 ── */
+$('copy').addEventListener('click', async () => {
+  if (!pending) return;
+  const text = pending.code;
+  try {
+    await navigator.clipboard.writeText(text);
+    showMsg('已复制到剪贴板', 'ok');
+  } catch {
+    // 兼容非 HTTPS 环境
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch {}
+    document.body.removeChild(ta);
+    showMsg(ok ? '已复制到剪贴板' : '复制失败，请手动选中复制', ok ? 'ok' : 'err');
+  }
+});
+
+/* ── 保存到列表 ── */
+$('save').addEventListener('click', () => {
+  if (!pending) return;
+  const list = loadRecords();
+  const i = list.findIndex((r) => r.studentId === pending.studentId);
+  if (i >= 0) {
+    if (!confirm(`列表里已有「${list[i].name} ${list[i].studentId}」，要覆盖吗？`)) return;
+    list[i] = pending;
+  } else {
+    list.push(pending);
+  }
+  saveRecords(list);
+  renderList();
+  showMsg('已保存到列表', 'ok');
+});
+
+/* ── 渲染列表 ── */
+function renderList() {
+  const list = loadRecords().sort((a, b) => b.createdAt - a.createdAt);
+  $('count').textContent = list.length + ' 条';
+  const box = $('list');
+
+  if (list.length === 0) {
+    box.innerHTML = '<div class="empty">还没有生成过</div>';
+    return;
+  }
+
+  const now = Date.now();
+  box.innerHTML = '';
+  for (const r of list) {
+    const expired = r.expiresAt && now > r.expiresAt;
+    const item = document.createElement('div');
+    item.className = 'item';
+
+    const main = document.createElement('div');
+    main.className = 'item-main';
+    const nm = document.createElement('div');
+    nm.className = 'item-name';
+    nm.textContent = r.name;
+    const sid = document.createElement('div');
+    sid.className = 'item-sid';
+    sid.textContent = r.studentId;
+    const code = document.createElement('div');
+    code.className = 'item-code';
+    code.textContent = r.code;
+    main.append(nm, sid, code);
+
+    const side = document.createElement('div');
+    side.className = 'item-side';
+    const badge = document.createElement('span');
+    if (expired) { badge.className = 'badge exp'; badge.textContent = '已过期'; }
+    else if (r.expiresAt) { badge.className = 'badge ok'; badge.textContent = fmtDate(r.expiresAt) + ' 到期'; }
+    else { badge.className = 'badge permanent'; badge.textContent = '长期有效'; }
+
+    const btnCopy = document.createElement('button');
+    btnCopy.className = 'btn-ghost';
+    btnCopy.textContent = '复制';
+    btnCopy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(r.code); showMsg('已复制 ' + r.name + ' 的码', 'ok'); }
+      catch { showMsg('复制失败，请手动选中', 'err'); }
+    });
+
+    const btnDel = document.createElement('button');
+    btnDel.className = 'btn-danger';
+    btnDel.textContent = '删除';
+    btnDel.addEventListener('click', () => {
+      if (!confirm(`删除「${r.name} ${r.studentId}」？`)) return;
+      saveRecords(loadRecords().filter((x) => x.studentId !== r.studentId));
+      renderList();
+      showMsg('已删除', 'ok');
+    });
+
+    side.append(badge, btnCopy, btnDel);
+    item.append(main, side);
+    box.appendChild(item);
+  }
+}
+
+/* ── 导出 / 导入 / 清空 ── */
+$('export').addEventListener('click', () => {
+  const list = loadRecords();
+  if (list.length === 0) { showMsg('列表是空的', 'err'); return; }
+  const payload = {
+    app: 'LifeKit',
+    kind: 'license-codes',
+    version: 1,
+    exportedAt: Date.now(),
+    records: list,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'lifekit-license-' + fmtDate(Date.now()) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showMsg('已导出 ' + list.length + ' 条', 'ok');
+});
+
+$('import-btn').addEventListener('click', () => $('import-file').click());
+$('import-file').addEventListener('change', (e) => {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const j = JSON.parse(reader.result);
+      const recs = Array.isArray(j) ? j : j.records;
+      if (!Array.isArray(recs)) throw new Error('格式不对');
+      const list = loadRecords();
+      let added = 0;
+      for (const r of recs) {
+        if (!r?.studentId || !r?.code) continue;
+        const i = list.findIndex((x) => x.studentId === r.studentId);
+        if (i >= 0) list[i] = r; else { list.push(r); added += 1; }
+      }
+      saveRecords(list);
+      renderList();
+      showMsg('导入完成，新增 ' + added + ' 条', 'ok');
+    } catch (err) {
+      showMsg('导入失败：' + err.message, 'err');
+    }
+  };
+  reader.readAsText(f);
+  e.target.value = '';
+});
+
+$('clear').addEventListener('click', () => {
+  if (loadRecords().length === 0) { showMsg('列表已经是空的', 'err'); return; }
+  if (!confirm('确定清空全部记录？建议先导出备份。')) return;
+  saveRecords([]);
+  renderList();
+  showMsg('已清空', 'ok');
+});
+
+/* ── 自检 ── */
+(function selfTest() {
+  /**
+   * ⚠️ 自检用的学号**故意用明显是假的**（99000 开头）。
+   *    原先这里写的是真实学号 —— 虽然用户看不到这段代码，
+   *    但源码会进仓库、可能被截图，没必要把真人学号留在里面。
+   */
+  const cases = ['9900000000016', '9900000000017', 'abc123', '  9900 0000 0016  '];
+  let bad = 0;
+  for (const c of cases) {
+    const code = generateLicenseCode(c);
+    const p = parseLicenseCode(code);
+    if (!p.ok) { bad += 1; console.error('自检失败（解析）:', c, code, p); continue; }
+    const mine = hashStudentId(c).slice(0, 12);
+    if (p.info.studentIdHash !== mine) { bad += 1; console.error('自检失败（哈希不一致）:', c, code); }
+  }
+  // 一码一人
+  const codeA = generateLicenseCode('9900000000016');
+  const pB = parseLicenseCode(codeA);
+  if (pB.ok && pB.info.studentIdHash === hashStudentId('9900000000017').slice(0, 12)) {
+    bad += 1;
+    console.error('自检失败：不同学号竟得到相同哈希');
+  }
+  if (bad === 0) console.log('%cLifeKit 授权码自检通过（含一码一人校验）', 'color:#10B981;font-weight:bold');
+  else console.error('自检发现 ' + bad + ' 个问题');
+})();
+
+renderList();
+</script>
+</body>
+</html>

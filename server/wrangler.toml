@@ -1,0 +1,18 @@
+# Cloudflare Worker 配置
+#
+# 部署命令（在**仓库根目录**下）：
+#   set CLOUDFLARE_API_TOKEN=<你的令牌>
+#   node node_modules\wrangler\bin\wrangler.js deploy --config server\wrangler.toml
+#
+# ⚠️ 令牌**不要写进这个文件** —— 用环境变量传，免得跟着仓库泄漏。
+
+name = "lifekit"
+main = "worker.mjs"
+compatibility_date = "2025-01-01"
+
+# ── KV 绑定 ──
+# 变量名必须是 LIFEKIT_KV（Worker 代码里就按这个名字找）。
+# id 在部署时由脚本用 API 填进来（见 tools/deploy-worker.cjs）。
+[[kv_namespaces]]
+binding = "LIFEKIT_KV"
+id = "PLACEHOLDER_KV_ID"

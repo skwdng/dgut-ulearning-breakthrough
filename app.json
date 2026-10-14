@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "LifeKit",
+    "slug": "lifekit",
+    "version": "1.1.5",
+    "orientation": "portrait",
+    "scheme": "lifekit",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.lifekit.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "fetch"
+        ],
+        "NSLocationWhenInUseUsageDescription": "用于优学院定位签到与校园位置提醒",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "用于后台监控优学院签到窗口"
+      }
+    },
+    "android": {
+      "package": "com.lifekit.app",
+      "versionCode": 135,
+      "permissions": [
+        "INTERNET",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "FOREGROUND_SERVICE",
+        "WAKE_LOCK"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#EEF2FF"
+      }
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "允许 LifeKit 在后台监控签到窗口"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#6366F1"
+        }
+      ]
+    ]
+  }
+}
