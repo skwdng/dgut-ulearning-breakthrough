@@ -271,16 +271,14 @@ function isProtected(p, method) {
    */
   if (p === '/api/version') return false;
   /**
-   * ⚠️ 三个通道的安装包都**免鉴权**（App 要能直接下载，不该弹密码框）。
-   *    自用通道也一样 —— 它靠"没人知道这个文件名"来降低暴露面，
-   *    而不是靠鉴权（文件名在 App 的版本接口里就会出现）。
+   * ⚠️ 两条通道的安装包都**免鉴权**（App 要能直接下载，不该弹密码框）。
+   *
+   * ⚠️ 2026-10：`/apk/lifekit-self.apk` 已从白名单删除 ——
+   *    自用通道连同那个含明文万能码的 APK 一起下架了。
+   *    它现在既不在下载路由里、也不在免鉴权白名单里，
+   *    所以任何请求都会先被鉴权拦住（然后 404）。
    */
-  if (
-    p === '/apk/lifekit-latest.apk' ||
-    p === '/apk/latest.apk' ||
-    p === '/apk/lifekit-test.apk' ||
-    p === '/apk/lifekit-self.apk'
-  )
+  if (p === '/apk/lifekit-latest.apk' || p === '/apk/latest.apk' || p === '/apk/lifekit-test.apk')
     return false;
   if (p === '/') return true; // 根路径就是管理页
   return PROTECTED_PREFIXES.some((x) => p.startsWith(x));
@@ -304,20 +302,32 @@ function isProtected(p, method) {
  * 需求（用户 2026-10）：
  *   「帮我新开一个测试版，用于测试，完成后再向正式版更新，
  *     上面的安装包我已经发出去了，不要动那个」
- *   「直接把自用的上传云端啊，我在应用内更新」  ← 自用版也要能应用内更新
  *
- * ⚠️ 三条通道必须有**各自独立的文件**：
+ * ⚠️ 两条通道必须有**各自独立的文件**：
  *
  *     ch=release（默认）→  apk/lifekit-latest.apk   + version.json
  *     ch=test           →  apk/lifekit-test.apk      + version-test.json
- *     ch=self           →  apk/lifekit-self.apk      + version-self.json
  *
  * ⚠️ 默认**必须是 release** —— 老客户端不带 `?ch=` 参数，
  *    它们必须继续看到正式版（否则已发出的包会被测试版更新掉）。
+ *
+ * ══════════════ ★★★ 2026-10：自用通道已删除（安全改进）══════════════
+ *
+ * 用户要求「把自用版删除吧」（三个版太麻烦，只留正式版和测试版）。
+ *
+ * ⚠️ 这不只是"少维护一条通道"，还是**一次安全收紧**：
+ *    自用版的 APK **内含明文万能码**，而它的权限是"能改任何人的签到状态"。
+ *    它之前被上传到云端、**可通过 `/apk/lifekit-self.apk` 下载** ——
+ *    也就是说任何人只要猜到文件名就能拿到万能码。
+ *
+ *    现在这个通道没了，**服务器上不再有任何含万能码的安装包**。
+ *
+ * ⚠️ 传 `ch=self` 会怎样：落到 `release`（见 channelOf）——
+ *    已装的自用版会看到正式版的版本信息。这是预期行为：
+ *    自用版已停止维护，它要么升到正式版，要么就不再更新。
  */
 function channelOf(ch) {
   if (ch === 'test') return 'test';
-  if (ch === 'self') return 'self';
   return 'release';
 }
 
@@ -325,7 +335,6 @@ function channelOf(ch) {
 const CHANNEL_FILES = {
   release: { apk: 'lifekit-latest.apk', meta: 'version.json' },
   test: { apk: 'lifekit-test.apk', meta: 'version-test.json' },
-  self: { apk: 'lifekit-self.apk', meta: 'version-self.json' },
 };
 
 function readApkMeta(channel = 'release') {
@@ -853,35 +862,34 @@ const server = http.createServer(async (req, res) => {
    * ⚠️ 用流式返回，不要整个读进内存（APK 有 30+ MB，
    *    两台手机同时下就可能把 2G 内存的机器压出问题）。
    */
+  /**
+   * ⚠️ 2026-10：`/apk/lifekit-self.apk` 这个路径**已删除**。
+   *
+   * 那个 APK 含明文万能码（能改任何人的签到状态），而它可以被直接下载 ——
+   * 只要猜到文件名就能拿到。自用版删除后它不该再存在，
+   * 所以这里**连路径判断一起去掉** —— 任何人请求它都会落到 404。
+   *
+   * ⚠️ 如果服务器磁盘上还留着 `server/apk/lifekit-self.apk`，
+   *    它已经**无法通过 HTTP 取到**了，但建议手工删掉（见部署说明）。
+   */
   if (
     p === '/apk/lifekit-latest.apk' ||
     p === '/apk/latest.apk' ||
-    p === '/apk/lifekit-test.apk' ||
-    p === '/apk/lifekit-self.apk'
+    p === '/apk/lifekit-test.apk'
   ) {
     /**
      * ★ 按路径取对应通道的文件。
      *   /apk/lifekit-latest.apk（或 latest.apk）→ 正式通道
      *   /apk/lifekit-test.apk                  → 测试通道
-     *   /apk/lifekit-self.apk                  → 自用通道（含万能码，只给管理员自己）
-     * ⚠️ 三条通道**文件独立** —— 互不覆盖。
+     * ⚠️ 两条通道**文件独立** —— 互不覆盖。
      */
-    const fileName =
-      p === '/apk/lifekit-test.apk'
-        ? 'lifekit-test.apk'
-        : p === '/apk/lifekit-self.apk'
-          ? 'lifekit-self.apk'
-          : 'lifekit-latest.apk';
+    const fileName = p === '/apk/lifekit-test.apk' ? 'lifekit-test.apk' : 'lifekit-latest.apk';
     const file = path.join(__dirname, 'apk', fileName);
     if (!fs.existsSync(file)) {
       return json(res, 404, {
         ok: false,
         error:
-          fileName === 'lifekit-test.apk'
-            ? '测试通道上还没有安装包'
-            : fileName === 'lifekit-self.apk'
-              ? '自用通道上还没有安装包'
-              : '服务器上还没有安装包',
+          fileName === 'lifekit-test.apk' ? '测试通道上还没有安装包' : '服务器上还没有安装包',
       });
     }
     const stat = fs.statSync(file);
@@ -890,11 +898,7 @@ const server = http.createServer(async (req, res) => {
       'Content-Length': stat.size,
       // 让手机浏览器/下载器知道这是个要存下来的文件
       'Content-Disposition': `attachment; filename="${
-        fileName === 'lifekit-test.apk'
-          ? 'LifeKit-test.apk'
-          : fileName === 'lifekit-self.apk'
-            ? 'LifeKit-self.apk'
-            : 'LifeKit.apk'
+        fileName === 'lifekit-test.apk' ? 'LifeKit-test.apk' : 'LifeKit.apk'
       }"`,
       'Cache-Control': 'no-cache',
     });

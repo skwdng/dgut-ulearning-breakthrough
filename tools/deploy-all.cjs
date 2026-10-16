@@ -307,20 +307,16 @@ if (!CODE_ONLY) {
    * ⚠️ 所以：
    *   正式通道 → lifekit-latest.apk + version.json      （已发出去的那份）
    *   测试通道 → lifekit-test.apk   + version-test.json  （新开的）
-   *   自用通道 → lifekit-self.apk   + version-self.json  （用户自己要应用内更新）
-   *   三条通道文件名不同 → 互不覆盖
+   *   两条通道文件名不同 → 互不覆盖
+   *
+   * ⚠️ 2026-10：自用通道（lifekit-self.apk / version-self.json）已删除
+   *    （用户要求"把自用版删除吧"）。传 `--self` 现在**被忽略** ——
+   *    于是会落到正式通道，而正式通道的文件本来就不会被这个脚本随便覆盖。
    */
   const TEST_CH = process.argv.includes('--test');
-  const SELF_CH = process.argv.includes('--self');
-  const apkName = TEST_CH ? 'lifekit-test.apk' : SELF_CH ? 'lifekit-self.apk' : 'lifekit-latest.apk';
-  const metaName = TEST_CH
-    ? 'version-test.json'
-    : SELF_CH
-      ? 'version-self.json'
-      : 'version.json';
-  console.log(
-    `\n[6/6] 上传 APK 与版本信息（${TEST_CH ? '测试通道' : SELF_CH ? '自用通道' : '正式通道'}）`,
-  );
+  const apkName = TEST_CH ? 'lifekit-test.apk' : 'lifekit-latest.apk';
+  const metaName = TEST_CH ? 'version-test.json' : 'version.json';
+  console.log(`\n[6/6] 上传 APK 与版本信息（${TEST_CH ? '测试通道' : '正式通道'}）`);
   ssh(`mkdir -p ${APK_DIR}`);
   for (const [src, dst] of [
     [path.join(ROOT, 'server', 'apk', apkName), `${APK_DIR}/${apkName}`],

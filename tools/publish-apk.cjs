@@ -41,19 +41,22 @@ const SERVER_APK_DIR = path.join(ROOT, 'server', 'apk');
  */
 const IS_TEST = process.argv.includes('--test');
 /**
- * ══════════════ ★★★ 自用通道（--self）══════════════
+ * ══════════════ ★★★ 2026-10：自用通道已删除 ══════════════
  *
- * 用户需求（原话）：
- *   「直接把自用的上传云端啊，我在应用内更新」
+ * 用户要求「把自用版删除吧」（三个版太麻烦，只留正式版和测试版）。
  *
- * → 自用版单独一条通道：`lifekit-self.apk` + `version-self.json`
- *   App 里检查更新会带 `?ch=self`，只看到自用通道的版本。
+ * 原来这里有个 `--self` 开关，对应 `lifekit-self.apk` + `version-self.json`。
+ * 现在**只剩两条通道**：
+ *   · 正式通道 → lifekit-latest.apk + version.json
+ *   · 测试通道 → lifekit-test.apk   + version-test.json
  *
- * ⚠️ 自用版**含明文万能码**，所以这个 APK 在服务器上是可下载的。
- *    靠"文件名不公开 + 只有自己知道"降低暴露面，
- *    但那不等于安全 —— 真要在意就得换掉万能码。
+ * ⚠️ 传 `--self` 会怎样：**被当成正式通道** —— 于是会撞上下面那道冻结闸
+ *    （没有 `--allow-official` 就直接拒绝）。这是**故意**的安全默认：
+ *    与其静默产出一个"自用通道"的存档，不如让命令明确失败。
+ *
+ * ⚠️ 顺带的好处：以前自用版的 APK 含明文万能码且上传到云端（可被下载），
+ *    现在**云端不再有任何含万能码的安装包**。
  */
-const IS_SELF = process.argv.includes('--self');
 /**
  * ══════════════ ★★★ 强制更新（--force）══════════════
  *
@@ -83,28 +86,26 @@ const FORCE = process.argv.includes('--force');
  */
 const ALLOW_OFFICIAL = process.argv.includes('--allow-official');
 /**
- * ⚠️ 冻结闸只管**正式通道**：测试 / 自用各有自己的文件，不会碰正式存档。
+ * ⚠️ 冻结闸只管**正式通道**：测试通道有自己的文件，不会碰正式存档。
  */
-if (!IS_TEST && !IS_SELF && !ALLOW_OFFICIAL) {
+if (!IS_TEST && !ALLOW_OFFICIAL) {
   console.error('');
   console.error('  ⛔ 拒绝覆盖正式通道的本地存档（lifekit-latest.apk / version.json）');
   console.error('     那是**已发布版本**的副本，覆盖后就无法核对"发出去的到底是哪个包"。');
   console.error('');
   console.error('     ✅ 发测试通道：node tools/publish-apk.cjs <apk> "说明" --test');
-  console.error('     ✅ 发自用通道：node tools/publish-apk.cjs <apk> "说明" --self');
   console.error('     ⚠️ 经用户批准升正式版：再加 --allow-official');
   console.error('');
   process.exit(2);
 }
 
 /**
- * ★ 三条通道 → 三组文件名（互不覆盖）。
+ * ★ 两条通道 → 两组文件名（互不覆盖）。
+ * ⚠️ 2026-10：自用通道（lifekit-self.apk / version-self.json）已删除。
  */
 const CHANNEL_FILES = IS_TEST
   ? { apk: 'lifekit-test.apk', meta: 'version-test.json' }
-  : IS_SELF
-    ? { apk: 'lifekit-self.apk', meta: 'version-self.json' }
-    : { apk: 'lifekit-latest.apk', meta: 'version.json' };
+  : { apk: 'lifekit-latest.apk', meta: 'version.json' };
 
 const LATEST = path.join(SERVER_APK_DIR, CHANNEL_FILES.apk);
 const META = path.join(SERVER_APK_DIR, CHANNEL_FILES.meta);

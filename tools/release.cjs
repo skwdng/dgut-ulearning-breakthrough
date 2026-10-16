@@ -79,32 +79,23 @@ const ALLOW_OFFICIAL =
 let TEST = process.argv.includes('--test');
 
 /**
- * ★★★ 自用版（含便利万能码，独立包名）。
+ * ══════════════ ★★★ 2026-10：自用版已删除 ══════════════
  *
- * 用户需求（原话）：
- *   「好，自用版可以用万能码，对外版和测试版不可用」
+ * 用户要求：「把自用版删除吧」—— 理由：「嫌三个版太麻烦，只留正式版和测试版」
  *
- * ⚠️ 三者的区别只有两点：
- *   · 万能码：自用版**保留**，对外版/测试版**剥离**
- *   · 包名：com.lifekit.app / .test / .self（为了三个能同时装）
+ * ⚠️ 原来这里有个 `--self` 开关（自用版：保留万能码 + 包名 .self + 自用通道）。
+ *    删掉它带来的**行为变化**（都要知道）：
  *
- * ⚠️ 自用版现在也**上传云端**了（用户要求应用内更新），走自用通道。
+ *   · **万能码从此没有任何版本可用** —— 原来只有自用版内置它。
+ *     现在的授权方式只剩：管理员在网页上生成 `LKM-` 个人授权码发给同学。
+ *   · `com.lifekit.app.self` 不再产出。已装的自用版还能打开，
+ *     但它问的是 `?ch=self` 那条通道，服务端已不再提供 → 收不到更新。
+ *   · 少一条通道 = 少一次打包、少一次上传、少一个要维护的版本号。
+ *
+ * ⚠️ 传 `--self` 会怎样：**被忽略**（没有这个开关了）。
+ *    但它**不会**导致打出带万能码的包 —— 见下面 STRIP_MASTER 的注释，
+ *    剥离策略现在变成"**一律剥离**"，不再有例外版本。
  */
-let SELF = process.argv.includes('--self');
-
-/**
- * ⚠️ `--test` 和 `--self` 互斥 —— 它们要的是**不同的包名和不同的万能码策略**，
- *    同时给会产出一个语义混乱的包。直接拒掉。
- */
-if (TEST && SELF) {
-  console.error('');
-  console.error('  XX  --test 和 --self 不能同时用');
-  console.error('      测试版 = 剥离万能码 + 包名 .test + 走测试通道');
-  console.error('      自用版 = 保留万能码 + 包名 .self + 只出包不发云端');
-  console.error('      两者目标不同，请分开打。');
-  console.error('');
-  process.exit(2);
-}
 
 /**
  * ══════════════ ★★★ 默认走测试通道（用户指示，2026-10）══════════════
@@ -112,19 +103,22 @@ if (TEST && SELF) {
  * 用户原话：
  *   「现在开始我说可以改正式版和自用版才可以改，其他默认改测试版」
  *
- * → 所以：**既没给 `--test` 也没给 `--self`、又没批准**时，
+ * → 所以：**既没给 `--test` 又没批准**时，
  *   不要报错拦下，而是**直接按测试版跑**。
  *
- * ⚠️ 这样"顺手跑一下发布脚本"永远不会碰到正式版/自用版 ——
+ * ⚠️ 这样"顺手跑一下发布脚本"永远不会碰到正式版 ——
  *    这正是用户要的默认行为。
  * ⚠️ 批准过（`--approved`）时**不做这个替换** —— 那说明确实要动正式版。
+ *
+ * ⚠️ 2026-10：自用版删除后，条件里的 `!SELF` 也去掉了 ——
+ *    现在只有两条通道，非测试即正式。
  */
-if (!TEST && !SELF && !ALLOW_OFFICIAL) {
+if (!TEST && !ALLOW_OFFICIAL) {
   TEST = true;
   console.log('');
   console.log('  ℹ️ 未指定版本 → **默认按测试版处理**');
   console.log('     （用户指示：「其他默认改测试版」）');
-  console.log('     要动正式版/自用版请显式加 --approved');
+  console.log('     要动正式版请显式加 --approved');
 }
 
 /**
@@ -135,15 +129,17 @@ if (!TEST && !SELF && !ALLOW_OFFICIAL) {
  *
  * 意思：
  *   · **默认**（不带参数）→ 上面已自动切到测试版
- *   · 正式版 / 自用版 → **必须用户明确说"可以"**，且调用时带 `--approved`
+ *   · 正式版 → **必须用户明确说"可以"**，且调用时带 `--approved`
  *
  * ⚠️ 为什么要 `--approved` 这个显式参数：
- *    正式版**已经发给别人**，覆盖它会直接影响所有人（而且现在开着 force）；
- *    自用版含明文万能码，上传后服务器上可被下载。
- *    两者都不该在"顺手跑一下发布脚本"时被无意改掉。
+ *    正式版**已经发给别人**，覆盖它会直接影响所有人（而且现在开着 force）。
+ *    它不该在"顺手跑一下发布脚本"时被无意改掉。
+ *
+ * ⚠️ 2026-10：自用版删除后，这里只剩"正式版"一种需要批准的通道
+ *    （原来还有自用版 —— 它含明文万能码，上传后服务器上可被下载）。
  *
  * ⚠️ 一定要在**打包之前**拦 —— 否则会白打一个包，
- *    还可能顺手覆盖本地存档（lifekit-latest.apk / lifekit-self.apk）。
+ *    还可能顺手覆盖本地存档（lifekit-latest.apk）。
  */
 const APPROVED = process.argv.includes('--approved');
 
@@ -151,24 +147,19 @@ const APPROVED = process.argv.includes('--approved');
 const NEEDS_APPROVAL = !TEST;
 
 if (NEEDS_APPROVAL && !APPROVED) {
-  const which = SELF ? '自用版' : '正式版';
   console.log('');
   console.log('  ' + '─'.repeat(58));
-  console.log(`  ⛔ ${which}已冻结，本次操作已取消`);
+  console.log('  ⛔ 正式版已冻结，本次操作已取消');
   console.log('  ' + '─'.repeat(58));
   console.log('');
-  console.log('  用户指示：「现在开始我说可以改正式版和自用版才可以改，');
+  console.log('  用户指示：「现在开始我说可以改正式版才可以改，');
   console.log('             其他默认改测试版」');
   console.log('');
   console.log('  ✅ 默认发测试版（什么都不用加）：');
   console.log('       node tools\\release.cjs "说明" --dist --test');
   console.log('');
-  console.log(`  ⚠️ 确实要动${which}（用户已明确说"可以"）时，再加 --approved：`);
-  console.log(
-    SELF
-      ? '       node tools\\release.cjs "说明" --dist --self --approved'
-      : '       node tools\\release.cjs "说明" --dist --approved --force',
-  );
+  console.log('  ⚠️ 确实要动正式版（用户已明确说"可以"）时，再加 --approved：');
+  console.log('       node tools\\release.cjs "说明" --dist --approved --force');
   console.log('');
   process.exit(2);
 }
@@ -221,31 +212,34 @@ step(1, '打包 APK');
  *    否则任何人反编译就能拿到万能码，而它的权限是"能改任何人"。
  */
 /**
- * ★★★ 万能码策略 —— 用户明确要求：
+ * ══════════════ ★★★ 万能码策略（2026-10 简化）══════════════
+ *
+ * 原策略（用户原话）：
  *   「好，自用版可以用万能码，对外版和测试版不可用」
+ *   → 只有**自用版**保留内置万能码；对外版、测试版一律剥离。
+ *   所以那时候是 `const STRIP_MASTER = !SELF;`
  *
- *   → 只有**自用版**保留内置万能码
- *   → 对外版、测试版一律剥离
+ * ⚠️ 2026-10 自用版删除后 → **所有版本一律剥离**，不再有例外。
  *
- * ⚠️ 所以不能再看 `--dist` 这个开关来决定剥不剥离，
- *    而要看**这次打的是哪个版本**（自用版例外）。
+ * ⚠️ 这是**安全上更严的方向**，不是放松：
+ *    · 以前存在一个"带明文万能码的包"（自用版），它上传到云端后
+ *      **理论上可被下载** —— 而万能码的权限是"能改任何人的签到"。
+ *    · 现在这个包不存在了，**没有任何构建产物含明文万能码**。
+ *    · 代价：你自己也不能再用万能码，改用管理员后台生成的 `LKM-` 个人码。
+ *
+ * ⚠️ 留 `STRIP_MASTER` 这个名字（而不是直接删掉这个常量并硬编码 '1'）——
+ *    是为了让下面的 buildEnv 保持"由策略决定"的形状，
+ *    以后万一又要开一个保留万能码的通道，改这一行即可。
  */
-const STRIP_MASTER = !SELF;
+const STRIP_MASTER = true;
 
-if (SELF) {
-  console.log('  ✅ 自用版：**保留**内置便利万能码（EXPO_PUBLIC_MASTER_CODE 可用）');
-  console.log('     包名 com.lifekit.app.self（与正式版/测试版都不冲突）');
-  console.log('     走**自用通道**（lifekit-self.apk）→ 支持应用内更新');
-} else if (DIST) {
+if (DIST) {
   console.log('  ⚠️ 对外发布版：剥离内置便利万能码（包里不会有明文）');
 }
 if (TEST) {
   console.log('  ⚠️ 测试版：走**测试通道**（lifekit-test.apk），不会动正式版');
 }
-if (SELF) {
-  console.log('  ⚠️ 自用版的 APK 会**上传到云端**（为了应用内更新）——');
-  console.log('     它含有明文万能码，服务器上可被下载。别外传这个地址。');
-}
+console.log('  ℹ️ 万能码已一律剥离（自用版删除后不再有例外版本）');
 
 /**
  * 本次打包要传下去的环境变量。
@@ -256,12 +250,11 @@ if (SELF) {
 const buildEnv = {
   ...(STRIP_MASTER ? { EXPO_PUBLIC_DISTRIBUTION: '1' } : {}),
   ...(TEST ? { EXPO_PUBLIC_CHANNEL: 'test' } : {}),
-  ...(SELF ? { EXPO_PUBLIC_CHANNEL: 'self' } : {}),
   /**
    * ⚠️ 换包名/换剥离开关时**必须强制重打 bundle** ——
    *    否则 Gradle 会因"输入没变"跳过重新打 bundle，
    *    环境变量根本没机会内联，打出来的包和上一个**字节完全相同**
-   *    （踩过：自用版和对外版 sha256 一样）。
+   *    （踩过：两个通道的包 sha256 一样）。
    */
   LIFEKIT_FORCE_REBUNDLE: '1',
 };
@@ -273,40 +266,27 @@ if (runNode('android/build-apk.cjs', [], buildEnv) !== 0) {
 const built = path.join(ROOT, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
 /**
  * ⚠️ 文件名要区分版本 —— 否则会覆盖别的版本的本地存档。
+ * ⚠️ 2026-10：自用版删除后不再有 `-SELF2-` 这个分支。
  */
 const target = path.join(
   ROOT,
-  SELF
-    ? `LifeKit-v${version}-SELF2-arm64.apk`
-    : TEST
-      ? `LifeKit-v${version}-TEST-arm64.apk`
-      : `LifeKit-v${version}-arm64.apk`,
+  TEST ? `LifeKit-v${version}-TEST-arm64.apk` : `LifeKit-v${version}-arm64.apk`,
 );
 fs.copyFileSync(built, target);
 console.log(`  √ ${path.basename(target)}（${(fs.statSync(target).size / 1048576).toFixed(1)} MB）`);
 
 /**
- * ══════════════ ★★★ 自用版也走云端（用户要求，2026-10）══════════════
+ * ══════════════ 2026-10：自用版删除后的通道说明 ══════════════
  *
- * 用户原话：「直接把自用的上传云端啊，我在应用内更新」
+ * 原来这里有一段"自用版也走云端（lifekit-self.apk / version-self.json）"
+ * 的说明 —— 用户要求删掉自用版后整段失效，已移除。
  *
- * → 所以自用版**不再提前退出**，它会和测试版一样继续走
- *   "发布到 server/apk/ → 部署到云端" 这两步，
- *   只是落到**自用通道**（lifekit-self.apk / version-self.json）。
- *
- * ⚠️ 三条通道文件独立，所以自用版不会碰正式版。
- * ⚠️ 但自用版**含明文万能码**，上传后服务器上可被下载 ——
- *    靠"文件名不公开"降低暴露面，不等于安全。
+ * 现在只有两条通道，文件独立，互不影响：
+ *   · 正式通道 → lifekit-latest.apk + version.json
+ *   · 测试通道 → lifekit-test.apk   + version-test.json
  */
 
-step(
-  2,
-  SELF
-    ? '发布到 server/apk/（自用通道）'
-    : TEST
-      ? '发布到 server/apk/（测试通道）'
-      : '发布到 server/apk/（正式通道）',
-);
+step(2, TEST ? '发布到 server/apk/（测试通道）' : '发布到 server/apk/（正式通道）');
 /**
  * ⚠️ 必须把 `--allow-official` **继续传给 publish-apk.cjs**。
  *
@@ -319,9 +299,7 @@ if (
     target,
     NOTE,
     ...(TEST ? ['--test'] : []),
-    /** ★ 自用通道（用户要求自用版也能应用内更新） */
-    ...(SELF ? ['--self'] : []),
-    ...(!TEST && !SELF && ALLOW_OFFICIAL ? ['--allow-official'] : []),
+    ...(!TEST && ALLOW_OFFICIAL ? ['--allow-official'] : []),
     /**
      * ★ 强制更新（用户 2026-10：「这次更新要设置为强制更新，
      *   有人要用我的诊断工具」）。
@@ -348,7 +326,7 @@ step(3, '部署到云端（服务端代码 + APK + 重启）');
  * `deploy-all.cjs` 会把服务端代码一起传上去、语法检查、备份、
  * 替换、重启、验证，并且有白名单守卫**绝不碰 data.json**。
  */
-const deploy = runNode('deploy-all.cjs', TEST ? ['--test'] : SELF ? ['--self'] : []);
+const deploy = runNode('deploy-all.cjs', TEST ? ['--test'] : []);
 if (deploy !== 0) {
   console.log('');
   console.log('  ⚠️ 云端部署没成功（上面有原因）。');

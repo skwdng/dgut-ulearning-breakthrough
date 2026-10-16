@@ -107,12 +107,16 @@ export function isNewer(remoteCode: number, remoteVersion: string): boolean {
  * 需求（用户 2026-10）：
  *   「帮我新开一个测试版，用于测试，完成后再向正式版更新，
  *     上面的安装包我已经发出去，不要动那个」
- *   「直接把自用的上传云端啊，我在应用内更新」  ← 自用版也要应用内更新
  *
- * 三条通道**文件独立**，客户端按自己的通道去问：
+ * ══════════════ ⚠️ 2026-10：自用通道已删除 ══════════════
+ *
+ * 用户要求「把自用版删除吧」（理由：三个版太麻烦，只留正式 + 测试）。
+ * 所以现在**两条通道**：
  *   · 正式版（不设变量）      → `/api/version`          → 正式通道
  *   · 测试版（CHANNEL=test）  → `/api/version?ch=test`  → 测试通道
- *   · 自用版（CHANNEL=self）  → `/api/version?ch=self`  → 自用通道
+ *
+ * ⚠️ 已发出的自用版 APK 会继续问 `?ch=self` —— 那条通道服务端已不再提供，
+ *    它会拿到正式通道的应答或被拒。**这是预期行为**：自用版已停止维护。
  *
  * ⚠️ 默认必须是正式通道 —— 已发出的老客户端不带参数，
  *    服务端也必须把它们当成正式版（见 server.cjs 的 channelOf）。
@@ -121,11 +125,16 @@ export function isNewer(remoteCode: number, remoteVersion: string): boolean {
  *    踩过：两个包 sha256 完全相同）。见 tools/release.cjs。
  */
 const CH = process.env.EXPO_PUBLIC_CHANNEL;
-const BUILD_CHANNEL: 'release' | 'test' | 'self' =
-  CH === 'test' ? 'test' : CH === 'self' ? 'self' : 'release';
+/**
+ * ⚠️ 只认 'test'，其余一律 'release'。
+ *    原来还有 `CH === 'self' ? 'self'`（已随自用版一起删除）——
+ *    留着的话，一条传 'self' 的旧流水线会让 App 去问 `/api/version?ch=self`，
+ *    而那个通道已经不存在了。
+ */
+const BUILD_CHANNEL: 'release' | 'test' = CH === 'test' ? 'test' : 'release';
 
 /** 当前安装包的通道（界面上可显示，方便确认自己装的是哪个） */
-export const currentChannel: 'release' | 'test' | 'self' = BUILD_CHANNEL;
+export const currentChannel: 'release' | 'test' = BUILD_CHANNEL;
 
 export async function checkUpdate(): Promise<
   | { ok: true; info: UpdateInfo | null; server?: string }
@@ -137,8 +146,7 @@ export async function checkUpdate(): Promise<
   try {
     /**
      * ★ 带上自己的通道 —— 各版本只看自己那条通道。
-     * ⚠️ `self` 也要带参数（原来只判了 test，自用版会误问正式通道，
-     *    结果被正式版的强制更新盯上）。
+     * ⚠️ 只有测试版才带参数；正式版不带（老客户端也不带，服务端按正式处理）。
      */
     const qs = BUILD_CHANNEL === 'release' ? '' : `?ch=${BUILD_CHANNEL}`;
     const res = await fetch(`${base}/api/version${qs}`, { method: 'GET' });

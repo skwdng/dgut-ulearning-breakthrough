@@ -1,13 +1,27 @@
 /**
- * 动态 Expo 配置 —— 让三个版本**同时装在一台手机上**。
+ * 动态 Expo 配置 —— 让**两个版本同时装在一台手机上**。
  *
  * ══════════════ 用户需求（原话）══════════════
  *
  *   「你搞两类安装包，然后能在我手机上弄出两个应用，
- *     一个是正常的，一个在后面加上测试版，
- *     正常的分为对外和自用」
+ *     一个是正常的，一个在后面加上测试版」
  *
- *   「好，自用版可以用万能码，对外版和测试版不可用」
+ * ══════════════ ⚠️ 2026-10：自用版已删除 ══════════════
+ *
+ * 原本有三个版本（对外 / 测试 / 自用）。用户要求：
+ *   「把自用版删除吧」—— 理由：「嫌三个版太麻烦，只留正式版和测试版」
+ *
+ * 所以现在只有两条通道：
+ *
+ *   对外版（正式）  com.lifekit.app        剥离万能码   发给同学
+ *   测试版          com.lifekit.app.test   剥离万能码   自己测试
+ *
+ * ⚠️ 删除自用版的连带影响（都要知道）：
+ *   · `com.lifekit.app.self` 这个包名不再产出 —— 已装的自用版**还能用**，
+ *     但它检查更新时会问 `?ch=self`，那条通道也没了 → 以后收不到更新
+ *   · **万能码从此没有任何版本可用**（原来只有自用版内置它）——
+ *     管理员在网页上生成个人授权码发人，是现在唯一的授权方式
+ *   · 少一条通道 = 少一次打包、少一次上传、少一个要维护的版本号
  *
  * ══════════════ ⚠️ 为什么必须改 applicationId ══════════════
  *
@@ -15,21 +29,15 @@
  *   · 两个包名相同 → 装第二个会**覆盖**第一个（还会因签名/版本冲突失败）
  *   · 两个包名不同 → **共存**，桌面出各自图标
  *
- * ⚠️ 踩过的坑：自用版原先也用 `com.lifekit.app`，和对外版撞车 ——
- *    装自用版会把对外版顶掉。所以自用版现在有**自己的包名**。
- *
- * ══════════════ 三个版本的分工 ══════════════
- *
- *   对外版  com.lifekit.app        剥离万能码   发给同学
- *   测试版  com.lifekit.app.test   剥离万能码   自己测试
- *   自用版  com.lifekit.app.self   **保留万能码** 自己用
- *
  * ══════════════ 怎么触发 ══════════════
  *
  * 打包时设 `EXPO_PUBLIC_CHANNEL`：
  *   不设 / 'release' → 对外版
  *   'test'           → 测试版
- *   'self'           → 自用版
+ *
+ * ⚠️ 传 'self' 会怎样：**被当成对外版**（见下面的三元表达式）。
+ *    这是**故意**的 —— 万一哪条旧流水线还在传 'self'，
+ *    宁可打出对外版（安全、剥离万能码），也绝不误产出一个带万能码的包。
  *
  * ⚠️ 「剥不剥离万能码」**不由这里决定** —— 那是
  *    `EXPO_PUBLIC_DISTRIBUTION` 控制的（见 src/domain/licenseCode.ts），
@@ -44,11 +52,14 @@
  */
 const base = require('./app.json');
 
-const CHANNEL = process.env.EXPO_PUBLIC_CHANNEL === 'test'
-  ? 'test'
-  : process.env.EXPO_PUBLIC_CHANNEL === 'self'
-    ? 'self'
-    : 'release';
+/**
+ * ⚠️ 只认 'test'，其余一律 'release'。
+ *
+ * 原来这里有三段（还认 'self'）。删掉自用版后**必须把 'self' 也去掉** ——
+ * 留着的话，一条传 'self' 的旧命令会打出 `com.lifekit.app.self` 的包，
+ * 而那个包名已经不在维护范围内了（更新通道也没了）。
+ */
+const CHANNEL = process.env.EXPO_PUBLIC_CHANNEL === 'test' ? 'test' : 'release';
 
 /** 正式/对外包名 */
 const BASE_ID = 'com.lifekit.app';
@@ -66,16 +77,6 @@ const VARIANTS = {
     slug: 'lifekit-test',
     scheme: 'lifekit-test',
     package: `${BASE_ID}.test`,
-  },
-  self: {
-    name: 'LifeKit 自用版',
-    slug: 'lifekit-self',
-    scheme: 'lifekit-self',
-    /**
-     * ★★★ 自己的包名 —— 与对外版/测试版都不冲突，可共存。
-     * ⚠️ 别再改回 `com.lifekit.app`：那会和对外版互相覆盖（踩过）。
-     */
-    package: `${BASE_ID}.self`,
   },
 };
 
@@ -98,7 +99,7 @@ module.exports = () => {
     scheme: v.scheme,
     android: {
       ...android,
-      /** ★★★ 这一行是"能同时装三个"的关键 */
+      /** ★★★ 这一行是"能同时装两个"的关键 */
       package: v.package,
     },
     ios: {
