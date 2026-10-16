@@ -7,7 +7,16 @@
 //     要按真实值跑：EXPO_PUBLIC_MASTER_CODE=你的码 node tools/check-master-code-input.cjs
 const fs = require('fs');
 
-const src = fs.readFileSync(__dirname + '/src/domain/licenseCode.ts', 'utf8');
+/**
+ * ⚠️ 路径必须用 `__dirname + '/../src/...'` —— 这个脚本在 `tools/` 目录下，
+ *    而源码在仓库根的 `src/`。
+ *
+ *    原来写的是 `__dirname + '/src/domain/licenseCode.ts'`，
+ *    解析成 `tools/src/domain/licenseCode.ts` —— **那个文件不存在**，
+ *    所以这个脚本一直是 `ENOENT` 崩掉，从来没真正跑过
+ *    （它不在 package.json 的 test:* 列表里，所以一直没被发现）。
+ */
+const src = fs.readFileSync(__dirname + '/../src/domain/licenseCode.ts', 'utf8');
 
 // 取出常量
 const envCode = process.env.EXPO_PUBLIC_MASTER_CODE || '';

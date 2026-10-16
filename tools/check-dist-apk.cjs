@@ -1,5 +1,22 @@
 /**
- * 对照检查：自用版 vs 对外版，确认**便利万能码真的被剥离了**。
+ * 对照检查：确认**便利万能码真的被剥离了**。
+ *
+ * ══════════════ ⚠️ 2026-10：自用版已删除，本脚本的"对照"前提没了 ══════════════
+ *
+ * 用户要求「把自用版删除吧」—— 自用版是**唯一保留内置万能码**的通道，
+ * 所以原来那个"自用版 vs 对外版"的对照不再成立：
+ * **现在没有任何版本会带明文万能码**（见 tools/release.cjs 的 STRIP_MASTER）。
+ *
+ * → 所以本脚本改成：
+ *   · 两个 APK 都在 → 照旧做对照（保留能力，以后万一要实证）
+ *   · **任一个不存在 → 优雅跳过**（打印说明、退出 0），而不是 ENOENT 崩溃
+ *
+ * ⚠️ 为什么不能直接删掉这个脚本：
+ *    "万能码有没有被剥离"是**安全关键**的检查（那种码能改任何人的签到）。
+ *    现在剥离逻辑由 `verify-master-strip-scope.cjs` 做源码级静态检查覆盖；
+ *    这个脚本保留着做**产物级实证**的能力 —— 需要时
+ *    `EXPO_PUBLIC_MASTER_CODE=你的码 node tools/check-dist-apk.cjs <apk> <参考apk>`
+ *    跑一次就能确认包里到底有没有。
  *
  * ══════════════ 🚨 为什么必须验证（不能"我以为剥离了"）══════════════
  *
@@ -20,16 +37,16 @@
  *     变量名会被 mangle/消除，源码里的标识符在包里**根本不存在**。
  *
  * 第 3 版（本文件）：**对照法**。
- *   · 自用版（不剥离）→ 那个码应该出现**很多次**（常量 + 相关逻辑）
- *   · 对外版（剥离）  → 只剩原生字符串表里那 **1 次**巧合
+ *   · 参考包（不剥离）→ 那个码应该出现**很多次**（常量 + 相关逻辑）
+ *   · 目标包（剥离）  → 只剩原生字符串表里那 **1 次**巧合
  *
- *   → 判据：`对外版出现次数` 必须 **明显少于** `自用版`，
- *     且对外版 ≤ 2（允许那 1~2 次巧合）。
+ *   → 判据：`目标包出现次数` 必须 **明显少于** `参考包`，
+ *     且目标包 ≤ 2（允许那 1~2 次巧合）。
  *
  * ⚠️ 公开仓库版（2026-10）：要搜的码改成从 `EXPO_PUBLIC_MASTER_CODE` 取，
  *    没设就跳过这项对比（不是失败）—— 详见下面 NEEDLE 那段注释。
  *
- * 用法: node tools/check-dist-apk.cjs [对外版APK] [自用版APK]
+ * 用法: node tools/check-dist-apk.cjs [目标APK] [参考APK]
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -38,10 +55,15 @@ const { execFileSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const DEFAULT_DIST = path.join(ROOT, 'LifeKit-v1.0.0-DIST-arm64.apk');
+/**
+ * ⚠️ 参考包原来是"自用版"（唯一保留万能码的版本）。
+ *    自用版已删除（2026-10），所以这个默认路径**大概率不存在** ——
+ *    下面会检测并优雅跳过，而不是抛 ENOENT。
+ */
 const DEFAULT_SELF = path.join(ROOT, 'LifeKit-v1.0.0-SELF-arm64.apk');
 
 const DIST_APK = process.argv[2] || DEFAULT_DIST;
-const SELF_APK = process.argv[3] || DEFAULT_SELF;
+const REF_APK = process.argv[3] || DEFAULT_SELF;
 
 /** 用 PowerShell 的 Expand-Archive 解出 bundle（不依赖 unzip / .NET 静态调用） */
 function extractBundle(apk) {
@@ -92,11 +114,42 @@ const t = (name, ok, extra = '') => {
 };
 
 console.log('');
-console.log('  对照检查：自用版 vs 对外版');
+console.log('  对照检查：目标包 vs 参考包（万能码剥离实证）');
 console.log('');
 
+/**
+ * ⚠️ 任一 APK 不存在 → **跳过而不是崩溃**。
+ *
+ *    原来这里直接 `extractBundle()` → `fs.copyFileSync` 找不到文件就抛
+ *    ENOENT 退出码 1。自用版删除后参考包**必然不存在**，
+ *    于是这个脚本每次都"失败" —— 而**一直失败的检查等于没有检查**，
+ *    真出问题那天没人会去看这堆已知噪音。
+ *
+ *    所以：文件不在就打印怎么补，然后退出 0（跳过 ≠ 通过，但也不该算失败）。
+ */
+const missing = [
+  ['目标包', DIST_APK],
+  ['参考包', REF_APK],
+].filter(([, p]) => !fs.existsSync(p));
+
+if (missing.length) {
+  for (const [label, p] of missing) {
+    console.log(`  · ${label}不存在：${path.basename(p)}`);
+  }
+  console.log('');
+  console.log('  ⏭️  跳过对照检查（不影响其它校验）');
+  console.log('');
+  console.log('  说明：');
+  console.log('    · 自用版已删除（2026-10），**现在没有任何版本带明文万能码**');
+  console.log('    · 剥离逻辑由 tools/verify-master-strip-scope.cjs 做源码级检查');
+  console.log('    · 要**产物级实证**时，自己指定两个 APK：');
+  console.log('        EXPO_PUBLIC_MASTER_CODE=你的码 node tools/check-dist-apk.cjs <目标.apk> <参考.apk>');
+  console.log('');
+  process.exit(0);
+}
+
 const dist = extractBundle(DIST_APK);
-const self = extractBundle(SELF_APK);
+const self = extractBundle(REF_APK);
 
 try {
   if (!dist.bundle || !self.bundle) {

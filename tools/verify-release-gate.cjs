@@ -1,5 +1,5 @@
 /**
- * 回归测试：**改动默认只发测试版；正式版/自用版必须显式批准**。
+ * 回归测试：**改动默认只发测试版；正式版必须显式批准**。
  *
  * ══════════════ 用户指示（原话）══════════════
  *
@@ -68,7 +68,12 @@ console.log('');
 console.log('=== 2) ★★★ 未指定版本时**默认按测试版跑** ===');
 t(
   '★★★ 有"默认切测试版"的逻辑',
-  /if \(!TEST && !SELF && !ALLOW_OFFICIAL\) \{\s*TEST = true;/.test(RELEASE),
+  /**
+   * ⚠️ 2026-10：条件从 `!TEST && !SELF && !ALLOW_OFFICIAL`
+   *    变成 `!TEST && !ALLOW_OFFICIAL`（自用版删除后没有 SELF 了）。
+   *    断言跟着改 —— 否则测试会一直失败，而**失败的测试等于没有测试**。
+   */
+  /if \(!TEST && !ALLOW_OFFICIAL\) \{\s*TEST = true;/.test(RELEASE),
 );
 t(
   '★★ TEST 必须是 let（要能被改）',
@@ -83,25 +88,38 @@ t(
 console.log('');
 console.log('=== 3) ★★ publish 那一层也有冻结闸（双保险）===');
 t(
-  '★★ 未批准且非 test/self → 拒绝覆盖正式存档',
-  /if \(!IS_TEST && !IS_SELF && !ALLOW_OFFICIAL\)[\s\S]{0,700}?process\.exit\(2\)/.test(PUBLISH),
+  '★★ 未批准且非 test → 拒绝覆盖正式存档',
+  /if \(!IS_TEST && !ALLOW_OFFICIAL\)[\s\S]{0,700}?process\.exit\(2\)/.test(PUBLISH),
 );
-t('★★ 三条通道文件名独立定义', /lifekit-self\.apk/.test(PUBLISH) && /lifekit-test\.apk/.test(PUBLISH) && /lifekit-latest\.apk/.test(PUBLISH));
+t(
+  '★★ 两条通道文件名独立定义（自用通道已删）',
+  /lifekit-test\.apk/.test(PUBLISH) && /lifekit-latest\.apk/.test(PUBLISH),
+);
+/**
+ * ⚠️ 2026-10：自用版删除后，`lifekit-self.apk` 这个**文件名**不应该再被使用。
+ *    留着的话说明某处还能产出"含明文万能码"的存档 —— 那是安全回退。
+ *
+ * ⚠️ 必须**先剥掉注释再判** —— 我自己在注释里写了"原来叫 lifekit-self.apk"
+ *    这类历史说明，直接搜文本会把注释算成失败（第一版就踩了这个）。
+ *    这也是本项目反复出现的坑：判据要针对**代码**，不是**文本**。
+ */
+const PUBLISH_CODE = PUBLISH.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+t('★★ 自用通道文件已彻底移除（只看代码）', !/lifekit-self|version-self/.test(PUBLISH_CODE));
+t('★★ release 不再有 --self 开关', !/\bSELF\b/.test(RELEASE.replace(/\/\*[\s\S]*?\*\//g, '')));
 
 console.log('');
-console.log('=== 4) ★★ 自用版走自己的通道（用户要的应用内更新）===');
-t('★★ release 会把 --self 传给 publish', /SELF \? \['--self'\]/.test(RELEASE));
-t('★★ release 会把 --self 传给 deploy', /SELF \? \['--self'\]/.test(RELEASE));
-t('★★ 自用版**不再**提前退出（要上传）', !/自用版已打好（未上传、未部署）/.test(RELEASE));
+console.log('=== 4) ★★ 万能码一律剥离（自用版删除后不再有例外）===');
+t('★★ STRIP_MASTER 恒为 true', /const STRIP_MASTER = true;/.test(RELEASE));
+t('★★ 有"一律剥离"的提示', /万能码已一律剥离/.test(RELEASE));
 
 console.log('');
 console.log('  ══════════════════════════════════════════════');
-console.log('  想动正式版/自用时，命令长这样：');
+console.log('  想动正式版时，命令长这样：');
 console.log('    正式：node tools\\release.cjs "说明" --dist --approved');
-console.log('    自用：node tools\\release.cjs "说明" --dist --self --approved');
 console.log('  其他情况（默认）：');
 console.log('    node tools\\release.cjs "说明" --dist        ← 自动走测试版');
 console.log('    node tools\\release.cjs "说明" --dist --test ← 同上');
+console.log('  ⚠️ 自用版已删除（2026-10），不再有 --self 通道');
 console.log('  ══════════════════════════════════════════════');
 console.log('');
 

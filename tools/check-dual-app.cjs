@@ -99,12 +99,24 @@ console.log('\n=== 5) ★★ 通道标记会写进 App（决定它问哪条通�
    *    现在钉的是"确实读了 EXPO_PUBLIC_CHANNEL 这个打包期变量"。
    */
   t('★★ 客户端按 EXPO_PUBLIC_CHANNEL 决定通道', /EXPO_PUBLIC_CHANNEL/.test(updater));
+  /**
+   * ⚠️ 2026-10 更新：自用版删除后**只有两条通道**（release / test）。
+   *    原来这条断言要求同时认出 'self' —— 现在反过来：
+   *    **不应再出现 'self'**，出现了说明自用通道没删干净。
+   */
   t(
-    '★★ 三条通道（release / test / self）都被识别',
-    /=== 'test'/.test(updater) && /=== 'self'/.test(updater) && /'release'/.test(updater),
+    '★★ 两条通道（release / test）都被识别',
+    /=== 'test'/.test(updater) && /'release'/.test(updater),
   );
+  /**
+   * ⚠️ 必须**先剥掉注释再判** —— updater.ts 的注释里写着
+   *    "原来还有 CH === 'self'"（历史说明），直接搜文本会算成失败。
+   *    本项目反复踩这个坑：判据要针对**代码**，不是**文本**。
+   */
+  const updaterCode = updater.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  t('★★ 自用通道已从客户端移除（只看代码）', !/'self'/.test(updaterCode));
   t('★★ 测试版请求带 ?ch=test', /\?ch=test/.test(updater));
-  t('★★ 默认是正式通道（老客户端不带参数也安全）', /: 'release';/.test(updater));
+  t('★★ 默认是正式通道（老客户端不带参数也安全）', /: 'release';/.test(updaterCode));
 }
 
 console.log('\n=== 6) ★★ 服务端两条通道文件独立 ===');
@@ -113,15 +125,20 @@ console.log('\n=== 6) ★★ 服务端两条通道文件独立 ===');
   t('★★ 正式通道用 lifekit-latest.apk', /lifekit-latest\.apk/.test(srv));
   t('★★ 测试通道用 lifekit-test.apk', /lifekit-test\.apk/.test(srv));
   /**
-   * ⚠️ 同样放宽过：原先钉 `ch === 'test' ? 'test' : 'release'`，
-   *    加了自用通道后变成三段 `if (ch === 'test') … if (ch === 'self') …`。
-   *    要钉的核心是"**默认落到 release**"（不带 ch 的老客户端看正式版）。
+   * ⚠️ 要钉的核心是"**默认落到 release**"（不带 ch 的老客户端看正式版）。
+   * ⚠️ 2026-10：自用版删除后，服务端也不该再有 self 通道 —— 一并断言，
+   *    否则服务端还留着 `/api/version?ch=self` 就等于给已废弃的包留后门。
    */
   t(
     '★★★ 默认通道是 release（不带 ch 的老客户端看正式版）',
-    /ch === 'self'\) return 'self';[\s\S]{0,60}?return 'release';/.test(srv) ||
-      /return 'release';/.test(srv),
+    /return 'release';/.test(srv),
   );
+  /**
+   * ⚠️ 同样要**剥注释再判** —— server.cjs 的注释里写了
+   *    "原来有 /apk/lifekit-self.apk" 这类历史说明。
+   */
+  const srvCode = srv.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  t('★★ 服务端已无自用通道（只看代码）', !/lifekit-self|version-self/.test(srvCode));
 }
 
 console.log('\n=== 7) ★ 换通道时会清理 android/（防包名残留）===');
