@@ -90,3 +90,9 @@ __pycache__/
 
 expo-env.d.ts
 # @end expo-cli
+
+# ── 构建标记（构建产物，不入库）──
+# ⚠️ tools/android/build-apk.cjs 每次打包都会重写它（内容是 `通道/包名`），
+#    入库会让 git 永远是脏的，而且它跟具体机器的构建历史绑定，对别人没意义。
+#    磁盘上的文件要保留 —— 构建脚本靠它判断"要不要清理 android/"。
+.build-channel
