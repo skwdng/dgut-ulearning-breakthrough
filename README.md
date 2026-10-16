@@ -141,9 +141,9 @@ EXPO_PUBLIC_DGUT_AUTH_HOST=https://auth.dgut.edu.cn
 
 ---
 
-## 4. 已实现 vs 未实现=
+## 4. 已实现 vs 未实现（如实说明）
 
-### =已实现
+### ✅ 已实现
 
 | 能力 | 说明 |
 |---|---|
@@ -227,7 +227,7 @@ EXPO_PUBLIC_DGUT_AUTH_HOST=https://auth.dgut.edu.cn
 - 注意：教师设定的**中心点与半径需要从签到详情接口读取**（`ENDPOINTS.rollcallDetail`，见 tech-spec §11 P0）；当前用课程配置的位置作为范围来源
 
 
-### 未实现
+### ❌ 未实现（有意留白，都有明确原因）
 
 | iOS端无法使用！！！
 
@@ -241,5 +241,5 @@ EXPO_PUBLIC_DGUT_AUTH_HOST=https://auth.dgut.edu.cn
 
 ---
 
-## 6.总结一下
+## 6. 总结一下
 剩下两个模块（外卖，ai）暂且没有开发，ios端目前无法使用，加减分功能稍后更，有点不中功能加减分目前没有很大意义，最重要的功能目前已经实现了，等后续完善。。
