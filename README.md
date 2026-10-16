@@ -1,9 +1,6 @@
 # LifeKit
 
-个人生活 App（React Native + Expo + TypeScript），**从 0 搭建**。
-设计依据：`ui-spec.md`；优学院签到模块的深入研究见 `youxue-checkin-tech-spec.md`。
-
-当前状态：**M1/M2 骨架已完成，签到模块以 adapter 架构实现，默认跑 MOCK 适配器**——不需要任何真实账号即可验证从"发现签到窗口"到"提交成功/失败"的完整状态流转。
+个人生活 App（React Native + Expo + TypeScript）
 
 ---
 
@@ -22,8 +19,6 @@
 | `LIFEKIT_HOST` | 部署脚本连的服务器 | 部署类脚本直接报错退出 |
 | `LIFEKIT_ADMIN_PASSWORD` | 管理后台口令 | 相关脚本要求你显式提供 |
 
-> ⚠️ **万能码只用纯字母数字**：判定链上输入侧会丢掉横线/空格/下划线，
-> 而常量侧不会 —— 带下划线的值会永远匹配不上（这个坑踩过）。
 
 模板见 `.env.example`。
 
@@ -146,9 +141,9 @@ EXPO_PUBLIC_DGUT_AUTH_HOST=https://auth.dgut.edu.cn
 
 ---
 
-## 4. 已实现 vs 未实现（如实说明）
+## 4. 已实现 vs 未实现=
 
-### ✅ 已实现
+### =已实现
 
 | 能力 | 说明 |
 |---|---|
@@ -232,7 +227,7 @@ EXPO_PUBLIC_DGUT_AUTH_HOST=https://auth.dgut.edu.cn
 - 注意：教师设定的**中心点与半径需要从签到详情接口读取**（`ENDPOINTS.rollcallDetail`，见 tech-spec §11 P0）；当前用课程配置的位置作为范围来源
 
 
-### ❌ 未实现
+### 未实现
 
 | iOS端无法使用！！！
 
