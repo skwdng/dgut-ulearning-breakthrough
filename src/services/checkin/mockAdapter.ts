@@ -162,10 +162,21 @@ export class MockCheckinAdapter implements CheckinAdapter {
 
   // ---------------- 数据 ----------------
 
-  async fetchCourses(_account: YouxueAccount): Promise<Course[]> {
+  /**
+   * ⚠️ `prev` 用于**保留本地字段**（location / autoCheckin）——
+   *    与真实实现 youxueAdapter.fetchCourses 行为一致。
+   *    mock 的课程是内存里造的本来就不会丢，但接口必须一致，
+   *    否则真实实现改了签名而 mock 没改会编译不过。
+   */
+  async fetchCourses(_account: YouxueAccount, prev?: Course[]): Promise<Course[]> {
     await delay(300);
     if (this.courses.length === 0) this.courses = buildMockCourses();
-    return this.courses;
+    if (!prev?.length) return this.courses;
+    const prevById = new Map(prev.map((c) => [c.id, c]));
+    return this.courses.map((c) => {
+      const old = prevById.get(c.id);
+      return old ? { ...c, location: old.location, autoCheckin: old.autoCheckin } : c;
+    });
   }
 
   async fetchStats(_account: YouxueAccount) {

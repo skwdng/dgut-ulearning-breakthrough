@@ -26,6 +26,7 @@ import {
   type Circle,
   type LatLng,
 } from '../utils/geo';
+import { describeGeoFailure, probeLocation, tryGetCurrentPosition } from '../utils/geoRuntime';
 
 const SIZE = 280;
 const CENTER = SIZE / 2;
@@ -65,21 +66,35 @@ export function LocationPicker({
     };
   };
 
+  /**
+   * 读一次设备定位（只在圆里显示"你在哪"这个参考点）。
+   *
+   * ⚠️ 用容错封装（utils/geoRuntime）——
+   *    没装 Google 服务的手机（国产机基本都是）直接调 `Location.*`
+   *    会**抛原生异常**。原来 `catch` 之后把 `e.message` 原样显示，
+   *    结果界面上出现一整段
+   *      `Location request has been rejected: 17: API: LocationServices...`
+   *    用户完全看不懂。真机实测踩过。
+   *
+   *    现在失败时给**说人话**的提示，并说明"手动选点照样能用"。
+   */
   const readDeviceLocation = async () => {
     setBusy(true);
     setLocError(null);
     try {
-      const perm = await Location.requestForegroundPermissionsAsync();
-      if (perm.status !== 'granted') {
-        setLocError('未授予定位权限');
+      const state = await probeLocation();
+      if (state !== 'ok') {
+        setLocError(describeGeoFailure(state));
         return;
       }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const point = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      const pos = await tryGetCurrentPosition(Location.Accuracy.High);
+      if (!pos) {
+        setLocError(describeGeoFailure('failed'));
+        return;
+      }
+      const point = { latitude: pos.latitude, longitude: pos.longitude };
       setDevice(point);
       setPicked((prev) => prev ?? point);
-    } catch (e) {
-      setLocError((e as Error).message || '读取定位失败');
     } finally {
       setBusy(false);
     }

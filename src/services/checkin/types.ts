@@ -98,7 +98,17 @@ export interface CheckinAdapter {
   unbind(accountId: string): Promise<void>;
 
   // ---- 数据 ----
-  fetchCourses(account: YouxueAccount): Promise<Course[]>;
+  /**
+   * 拉课程列表。
+   *
+   * ⚠️ `prev` 是**上一次的课程数组** —— 实现方**必须**把它里面
+   *    属于本地的字段合并回来（`location` 签到位置、`autoCheckin` 课程开关）。
+   *
+   *    原因见 youxueAdapter.fetchCourses 的注释：服务端**不返回**这两个字段，
+   *    不合并就会"每次查课程都把用户设置清掉"——
+   *    用户圈好的签到范围会莫名其妙消失，关掉的课程会自己开回来。
+   */
+  fetchCourses(account: YouxueAccount, prev?: Course[]): Promise<Course[]>;
   fetchStats(account: YouxueAccount): Promise<{ todayDone: number; todayTotal: number; successRate: number; streakDays: number }>;
   fetchHistory(account: YouxueAccount, limit?: number): Promise<RollcallTask[]>;
 

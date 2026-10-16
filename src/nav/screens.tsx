@@ -17,6 +17,7 @@ import { YouxueTaskScreen } from '../screens/youxue-task';
 import { XiaoCaoScreen } from '../screens/xiaocao';
 import { SignQrScreen } from '../screens/sign-qr';
 import { SignLocationScreen } from '../screens/sign-location';
+import { CourseLocationScreen } from '../screens/course-location';
 import { SignOneshotScreen } from '../screens/sign-oneshot';
 import { CheckinManualScreen } from '../screens/checkin-manual';
 import { CheckinLogScreen } from '../screens/checkin-log';
@@ -94,6 +95,13 @@ export const PUSHED_SCREENS: Record<RoutePath, PushedScreenDef> = {
    */
   '/sign-qr': { title: '签到记录', Component: licensed(SignQrScreen) },
   '/sign-location': { title: '地点签到', Component: licensed(SignLocationScreen) },
+  /**
+   * ★ 课程签到位置设置（地图围范围，2026-10 新增）
+   *
+   * ⚠️ 它是**签到类**页面（设置之后会影响定位签到提交什么坐标），
+   *    所以必须和别的签到页一样过 `licensed(...)` 授权码门槛。
+   */
+  '/course-location': { title: '设置签到位置', Component: licensed(CourseLocationScreen) },
   '/sign-oneshot': { title: '一键签到', Component: licensed(SignOneshotScreen) },
   /**
    * ⚠️ `/checkin`（自动签到设置页）**已删除** ——

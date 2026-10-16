@@ -14,6 +14,7 @@
  */
 import * as Location from 'expo-location';
 import { store, STORE_KEYS } from './storage';
+import { logFault } from './crashLog';
 import { findCity } from '../data/chinaCities';
 
 export interface WeatherNow {
@@ -213,11 +214,22 @@ export async function fetchWeatherEx(opts: { force?: boolean } = {}): Promise<We
       }
     }
   } catch (e) {
+    /**
+     * ⚠️ 2026-10 改动：原来这里把**原生错误的原文**截 80 字符显示给用户：
+     *      「这台设备用不了系统定位（Location request has been rejected: 17:
+     *        API: LocationServices.API is not available on this devi…）」
+     *    真机上看到的就是这一长串英文 —— 用户完全看不懂，
+     *    而这种情况**恰恰是国产机的常态**（没装 Google 服务）。
+     *
+     *    现在：只说人话 + 明确告诉他"选城市不受影响"。
+     *    技术细节仍写进崩溃日志，需要排查时查得到。
+     */
+    logFault(`[天气] 系统定位不可用：${(e as Error).message}`, 'weather.location');
     locationFailure = {
       kind: 'location',
       message:
-        `这台设备用不了系统定位（${(e as Error).message.slice(0, 80)}…）。` +
-        `可以直接选一个城市 —— 手动选的城市不依赖定位。`,
+        '这台设备的系统定位用不了（常见原因：手机没有 Google 服务，或定位总开关关着）。' +
+        '直接在上面选一个城市就行 —— 手动选的城市不依赖定位。',
     };
   }
 

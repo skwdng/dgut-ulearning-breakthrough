@@ -68,6 +68,23 @@ interface Props {
   showOneshot?: boolean;
   /** 数据为空时的引导文案 */
   emptyHint?: string;
+  /**
+   * ★ 在**位置筛选中**额外显示一个「设置签到位置」按钮（2026-10 新增）。
+   *
+   * ⚠️ 为什么需要这个口子（踩过的坑）：
+   *    新做的「地图围范围」页面（`/course-location`）第一版**只从
+   *    `/sign-location`（地点签到页）进得去** —— 而那个页面**在 App 里
+   *    没有任何入口**（只有路由注册，没有 router.push）。
+   *    结果：功能做完了，用户**根本找不到**，截图问"为什么没有显示这个功能"。
+   *
+   *    这正是本项目反复出现的教训：**功能做完了 ≠ 用户能找到。**
+   *    用户看的是「签到记录」页（那里有全部方式/扫码/位置/数字码/一键 筛选），
+   *    所以入口必须出现在**他实际会看的那一页**。
+   *
+   * ⚠️ 只在 `methodFilter === 'location'`（或 `onlyMethod === 'location'`）时显示 ——
+   *    否则"定位"相关的设置会出现在看扫码记录的时候，属于噪音。
+   */
+  onSetLocation?: () => void;
 }
 
 export function SignRecordList({
@@ -75,6 +92,7 @@ export function SignRecordList({
   intro,
   allowChange = false,
   emptyHint,
+  onSetLocation,
 }: Props) {
   const sign = useSign();
   const { account } = useCheckin();
@@ -567,6 +585,39 @@ export function SignRecordList({
               );
             })}
           </Row>
+
+          {/*
+            ★ 「设置签到位置」入口（2026-10 新增）
+
+            ⚠️ 只在**筛成"位置"**时出现（或在只显示位置的页面上）——
+               看扫码/数字码记录时冒出个"定位设置"属于噪音。
+
+            ⚠️ 为什么放在这里：用户就是在这一页看签到记录的，
+               他筛出"位置"就是想处理位置签到 ——
+               这时候告诉他"可以给这门课圈个范围"，正好是他需要的时刻。
+               之前那个页面**在 App 里没有任何入口**（我把它挂在一个
+               自己也进不去的页面上），用户直接问"为什么没有显示这个功能"。
+          */}
+          {(onlyMethod === 'location' || methodFilter === 'location') && onSetLocation ? (
+            <>
+              <Spacer h={8} />
+              <Pressable
+                onPress={onSetLocation}
+                style={{
+                  borderWidth: 1,
+                  borderColor: color.primary[500],
+                  backgroundColor: color.primary[50],
+                  borderRadius: radius.md,
+                  paddingVertical: 10,
+                  alignItems: 'center',
+                }}
+              >
+                <Txt variant="caption" weight="medium" c={color.primary[500]}>
+                  设置签到位置（地图围范围）—— 之后不用人在现场也能签
+                </Txt>
+              </Pressable>
+            </>
+          ) : null}
         </Section>
       ) : null}
 

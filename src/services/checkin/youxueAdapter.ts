@@ -614,20 +614,56 @@ export class YouxueCheckinAdapter implements CheckinAdapter {
 
   // ---------------- 数据 ----------------
 
-  async fetchCourses(account: YouxueAccount): Promise<Course[]> {
+  /**
+   * 拉课程列表。
+   *
+   * ══════════════ ★★★ 2026-10：保留本地设置（踩过的坑）══════════════
+   *
+   * ⚠️ **原来的写法会清掉用户设的签到位置。**
+   *
+   *    原实现每次都用服务端数据**重新构造** Course 对象：
+   *        return overview.courses.map((c) => ({ id, name, teacher, autoCheckin, ... }));
+   *    里面**没有 `location`**（也硬编码 `autoCheckin: true`）——
+   *    而 `location` 是**纯本地数据**，服务端根本不返回它。
+   *
+   *    后果：用户在「设置签到位置」里辛苦圈好范围 →
+   *          下次打开 App 查一次课程 → **位置没了，位置签到又只能用真实 GPS**。
+   *          而且没有任何提示，用户只会觉得"设了没用"。
+   *
+   * ✅ 现在：把**上一次的本地设置**按课程 id 合并回来。
+   *    服务端字段（名字/教师/统计）照旧覆盖，本地字段（location）保留。
+   *
+   * ⚠️ 为什么 `autoCheckin` 也一并保留：
+   *    它同样是本地开关（用户在课程列表里关掉某门课）。
+   *    原来每次拉取都被重置成 true —— 用户关掉的课会**自己又开回来**。
+   *    这是同一个 bug 的另一个表现，顺手一起修。
+   *
+   * ⚠️ 新出现的课程没有本地记录 → 用默认值（autoCheckin: true）。
+   *    已经消失的课程直接丢掉（服务端没有了就是没有了）。
+   */
+  async fetchCourses(account: YouxueAccount, prev?: Course[]): Promise<Course[]> {
     const api = await this.ensureSignApi(account);
     if (!api) throw makeError('E_SESSION_EXPIRED', '缺少会话或 userId，请重新绑定');
     const overview = await api.fetchOverview();
+    /** 上一次的本地设置（按课程 id 索引）—— 没有就空 Map，行为与老版本一致 */
+    const prevById = new Map((prev ?? []).map((c) => [c.id, c]));
     // 用签到记录聚合出的课程（实测 /courses/students 在公网 502，改用此路径）
-    return overview.courses.map((c) => ({
-      id: String(c.ocId),
-      name: c.name,
-      teacher: c.teacher ?? '',
-      autoCheckin: true,
-      schedule: [],
-      totalCheckins: c.records.length,
-      completedCheckins: c.signedCount,
-    }));
+    return overview.courses.map((c) => {
+      const id = String(c.ocId);
+      const old = prevById.get(id);
+      return {
+        id,
+        name: c.name,
+        teacher: c.teacher ?? '',
+        /** ★ 保留用户设的开关；新课程默认开 */
+        autoCheckin: old?.autoCheckin ?? true,
+        /** ★ 保留用户圈好的签到位置（服务端不返回它） */
+        location: old?.location,
+        schedule: old?.schedule ?? [],
+        totalCheckins: c.records.length,
+        completedCheckins: c.signedCount,
+      };
+    });
   }
 
   async fetchStats(account: YouxueAccount) {

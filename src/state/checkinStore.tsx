@@ -235,6 +235,16 @@ export interface CheckinActions {
   refreshHistory(): Promise<void>;
   toggleAuto(enabled: boolean): Promise<void>;
   toggleCourse(courseId: string, enabled: boolean): Promise<void>;
+  /**
+   * ★ 设置 / 清除一门课的签到位置（地围栏圈）。
+   *
+   * 传 `null` 清除。设置后，这门课的位置签到会用**圈内随机取点**提交，
+   * 而不是手机真实 GPS（见 utils/geo.ts 的 pickInsideWithJitter）。
+   */
+  setCourseLocation(
+    courseId: string,
+    location: { latitude: number; longitude: number; radius?: number; address?: string } | null,
+  ): Promise<void>;
   updatePlan(patch: Partial<PollPlan>): Promise<void>;
   /** 立刻检测一次（手动） */
   detectNow(): Promise<void>;
@@ -546,7 +556,7 @@ export function CheckinProvider({ children }: { children: React.ReactNode }) {
           dispatch({ type: 'LOG', level: 'info', text: `绑定成功（账号密码）：${acc.studentId}` });
           void (async () => {
             try {
-              const courses = await adapter.fetchCourses(acc);
+              const courses = await adapter.fetchCourses(acc, stateRef.current.courses);
               if (stateRef.current.account?.id !== acc.id) return;
               dispatch({ type: 'SET_COURSES', courses });
             } catch {
@@ -595,7 +605,12 @@ export function CheckinProvider({ children }: { children: React.ReactNode }) {
           /** ★ 课程后台拉 —— 不 await，登录不等它 */
           void (async () => {
             try {
-              const courses = await adapter.fetchCourses(acc);
+              /**
+               * ⚠️ 传 `stateRef.current.courses` 作为 prev ——
+               *    这样用户之前设的**签到位置**与**课程开关**不会被这次拉取清掉。
+               *    详见 youxueAdapter.fetchCourses 的注释（这是个踩过的坑）。
+               */
+              const courses = await adapter.fetchCourses(acc, stateRef.current.courses);
               /**
                * ⚠️ 回来时**必须再确认账号没变** ——
                *    用户在等待期间可能又切了账号，那就不能把
@@ -633,7 +648,7 @@ export function CheckinProvider({ children }: { children: React.ReactNode }) {
           dispatch({ type: 'LOG', level: 'info', text: '短信验证通过，绑定完成' });
           void (async () => {
             try {
-              const courses = await adapter.fetchCourses(acc);
+              const courses = await adapter.fetchCourses(acc, stateRef.current.courses);
               if (stateRef.current.account?.id !== acc.id) return;
               dispatch({ type: 'SET_COURSES', courses });
             } catch {
@@ -658,7 +673,12 @@ export function CheckinProvider({ children }: { children: React.ReactNode }) {
       async refreshCourses() {
         const account = stateRef.current.account;
         if (!account) return;
-        const courses = await getAdapter().fetchCourses(account);
+        /**
+         * ⚠️ 这一处**最要紧** —— 它是用户手动点「刷新课程」走的路径。
+         *    不传 prev 的话，用户圈好的签到位置会在这次刷新后消失，
+         *    而他刚刚才在上一屏设好，最容易以为是"设了没用"。
+         */
+        const courses = await getAdapter().fetchCourses(account, stateRef.current.courses);
         dispatch({ type: 'SET_COURSES', courses });
       },
 
@@ -682,6 +702,45 @@ export function CheckinProvider({ children }: { children: React.ReactNode }) {
 
       async toggleCourse(courseId, enabled) {
         dispatch({ type: 'PATCH_COURSE', courseId, patch: { autoCheckin: enabled } });
+      },
+
+      /**
+       * ★ 设置一门课的签到位置（地围栏圈）。
+       *
+       * 用户需求（原话）：
+       *   「给我把位置签到完善一下，要做到要在发起签到的设备围一个圈选位置」
+       *   「要不就自己引用个地图，手指滑动，让标点对准位置」
+       *
+       * ⚠️ 为什么存在 `Course.location` 而不是新建一张表：
+       *    这个字段**本来就有**（domain/types.ts），`courseLocation()` 一直在读它，
+       *    只是从来没有界面去写它 —— 所以之前位置签到只能用手机真实 GPS。
+       *    复用它是**最省事也最不容易出错**的做法：不用改存储格式，
+       *    老用户升级后已存的 location 照旧生效。
+       *
+       * ⚠️ 传 `null` 表示**清除**这门课的位置 ——
+       *    PATCH_COURSE 是浅合并，直接给 `location: undefined` 在
+       *    JSON 序列化时会被丢掉，导致"看起来清了其实没清"。
+       *    所以这里显式给 `null`，由 reducer 负责删掉这个键。
+       */
+      async setCourseLocation(
+        courseId: string,
+        location: { latitude: number; longitude: number; radius?: number; address?: string } | null,
+      ) {
+        dispatch({
+          type: 'PATCH_COURSE',
+          courseId,
+          patch: { location: location ?? undefined },
+        });
+        const c = stateRef.current.courses.find((x) => x.id === courseId);
+        dispatch({
+          type: 'LOG',
+          level: 'info',
+          text: location
+            ? `已设置「${c?.name ?? courseId}」的签到位置：` +
+              `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}` +
+              `　半径 ${location.radius ?? 120}m`
+            : `已清除「${c?.name ?? courseId}」的签到位置`,
+        });
       },
 
       async updatePlan(patch) {

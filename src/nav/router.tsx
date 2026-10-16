@@ -58,6 +58,13 @@ export type RoutePath =
   | '/xiaocao'
   | '/sign-qr'
   | '/sign-location'
+  /**
+   * ★ 课程签到位置设置（地图围范围，2026-10 新增）。
+   *
+   * ⚠️ 它是**签到类**页面（设置后影响定位签到提交什么坐标），
+   *    所以在 screens.tsx 里也过了 `licensed(...)` 授权码门槛。
+   */
+  | '/course-location'
   | '/sign-oneshot'
   /**
    * ⚠️ `/checkin` 已删除 —— 那是「自动签到设置页」，用户明确说不要自动签到。
