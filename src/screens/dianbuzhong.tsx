@@ -473,7 +473,7 @@ export function DianBuZhongScreen() {
 
           <Spacer h={6} />
           <Txt variant="caption" c={color.text.tertiary} style={{ lineHeight: 16 }}>
-            {'⚠️ 仍然**只删今天**的活动 —— 手填一个过去课堂的 id 也没用，历史记录不会被改。'}
+            {'⚠️ 仍然只删今天的活动 —— 手填一个过去课堂的 id 也没用，历史记录不会被改。'}
           </Txt>
 
           {out ? (

@@ -114,7 +114,7 @@ export function CheckinManualScreen() {
             <Spacer h={spacing.md} />
             <Txt variant="caption" c={color.text.tertiary}>
               {'扫码后会匹配当前最近的签到任务并自动提交。\n'}
-              {'⚠️ 本 App 已**不含自动检测** —— 没有已知任务时，请到'}
+              {'⚠️ 本 App 已不含自动检测 —— 没有已知任务时，请到'}
               {'「小操作 → 签到记录」里先点一次「查询」，把签到记录拉出来。'}
             </Txt>
           </Section>

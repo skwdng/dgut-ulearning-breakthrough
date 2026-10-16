@@ -233,7 +233,7 @@ export function LicenseGate() {
         <Section title={unlocked ? '更换授权码' : '填写授权码'}>
           <Card>
             <Txt variant="small" c={color.text.secondary} style={{ lineHeight: 20 }}>
-              {'向管理员要一个**和你的学号对应**的授权码，粘到下面提交即可。\n'}
+              {'向管理员要一个和你的学号对应的授权码，粘到下面提交即可。\n'}
               {'码是一人一码的 —— 别人的码在你这里用不了。\n'}
               {'也可以直接填万能码（管理员持有，不绑学号）。'}
             </Txt>
@@ -299,7 +299,7 @@ export function LicenseGate() {
       <Section>
         <Card>
           <Txt variant="caption" c={color.text.tertiary} style={{ lineHeight: 18 }}>
-            {'• 授权码只控制**小操作**（签到 / 加减分 / 点不中），任务查询不受影响。\n'}
+            {'• 授权码只控制小操作（签到 / 加减分 / 点不中），任务查询不受影响。\n'}
             {'• 码里嵌了你学号的哈希，校验时会拿当前登录的学号比对。\n'}
             {'• 换账号后需要重新填一次与新学号对应的码。'}
           </Txt>

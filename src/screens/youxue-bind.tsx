@@ -88,7 +88,7 @@ export function YouxueBindScreen() {
       <Section style={{ marginTop: spacing.md }} title="登录优学院">
         <Card>
           <Txt variant="small" c={color.text.secondary} style={{ lineHeight: 20 }}>
-            {'点下面的按钮，会打开**学校自己的登录页面**，\n'}
+            {'点下面的按钮，会打开学校自己的登录页面，\n'}
             {'你在那里输学号和密码就行。\n\n'}
             {'密码只在学校页面里输入，App 看不到也不保存；\n'}
             {'登录成功后 App 只保留一个会话凭证（token）。'}
