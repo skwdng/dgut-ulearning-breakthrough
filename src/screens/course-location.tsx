@@ -25,7 +25,11 @@
  * 界面上给 50 / 120 / 200 / 300 四档 —— 够用且不用打字。
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import * as Location from 'expo-location';
+/**
+ * ⚠️ 原先这里 `import * as Location from 'expo-location';` 但**从未使用**
+ *    （定位能力统一走 `utils/geo` 里的 `probeLocation` / `tryGetCurrentPosition`）。
+ *    死代码检查抓到了，删掉。
+ */
 import { Banner, Button, Card, Col, Row, ScreenScroll, Section, Spacer, Txt } from '../components';
 import { MapPicker } from '../components/MapPicker';
 import { color, radius as radii, spacing } from '../theme/tokens';

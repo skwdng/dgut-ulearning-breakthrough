@@ -8,6 +8,8 @@
  * - 记录服务端时间，用于客户端时间校准（防 clientTime 校验失败）。
  */
 import { encryptCasPassword } from './crypto/aes';
+import { getCurrentSite } from '../../config/currentSite';
+import { hostsOfSite } from '../../config/sites';
 
 /** 取 URL 的 host（失败返回原串） */
 function safeHost(u: string): string {
@@ -262,9 +264,18 @@ export class HttpClient {
       out.push(`   正文全文=${post.body.replace(/\s+/g, ' ').slice(0, 900)}`);
     }
 
-    // 落在 auth 域名且页面里还有表单 → 密码被判错
+    /**
+     * 落在**登录页**且页面里还有密码表单 → 密码被判错。
+     *
+     * ⚠️ 原来写死 `auth.dgut.edu.cn`。这整段是**东莞理工 CAS 的诊断**，
+     *    优学院全国站没有 CAS（普通账号密码登录），所以：
+     *      · 有 authHost → 按当前站点的 auth 域名判
+     *      · 没有 authHost → 退化成"页面上还有密码表单"这一个判据
+     */
+    const authHostName = (getCurrentSite().services.auth ?? '').replace(/^https?:\/\//, '');
     const backOnLoginPage =
-      postHost.includes('auth.dgut.edu.cn') && post.body.includes('pwdEncryptSalt');
+      (authHostName ? postHost.includes(authHostName) : true) &&
+      post.body.includes('pwdEncryptSalt');
     if (backOnLoginPage) {
       const errMsg =
         (/id=["']showErrorTip["'][^>]*>([^<]{2,120})</i.exec(post.body) ?? [])[1] ??
@@ -311,8 +322,16 @@ export class HttpClient {
       break;
     }
 
-    // ── 4) 兜底：直接访问应用中心与 lms 根路径 ──
-    for (const h of ['application.dgut.edu.cn', 'lms.dgut.edu.cn']) {
+    /**
+     * ── 4) 兜底：直接访问各服务根路径 ──
+     *
+     * ⚠️ 原来写死 `['application.dgut.edu.cn', 'lms.dgut.edu.cn']`。
+     *    那两个是**东莞理工专有**的；优学院全国站要试的是
+     *    `apps./courseapi./classroomapi.ulearning.cn`。
+     *    所以按当前站点算（顺序：lms 在前，因为它最可能是会话入口）。
+     */
+    const probeHosts = hostsOfSite(getCurrentSite());
+    for (const h of probeHosts) {
       const has = TOKEN_NAMES.some((t) => this.cookies[t]);
       if (has) break;
       try {

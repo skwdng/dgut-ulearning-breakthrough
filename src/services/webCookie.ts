@@ -12,6 +12,8 @@
  * 非 Android 平台（iOS）返回 null，调用方走降级路径。
  */
 import { NativeModules, Platform } from 'react-native';
+import { getCurrentSite } from '../config/currentSite';
+import { hostsOfSite } from '../config/sites';
 interface WebCookieNative {
   getCookie(url: string, flush: boolean): Promise<Record<string, string>>;
   flush(): Promise<boolean>;
@@ -244,7 +246,16 @@ export async function setCookieInManager(
    * 三个域名都写一遍：cookie 到底属于哪个站点，从 document.cookie 看不出来，
    * 全写一遍可以让后续任意域名的请求都带上它。
    */
-  const hosts = ['application.dgut.edu.cn', 'lms.dgut.edu.cn', 'auth.dgut.edu.cn'];
+  /**
+   * ⚠️ 宿主列表**按当前站点**算，不再写死东莞理工的三个域名。
+   *
+   * 原来：['application.dgut.edu.cn', 'lms.dgut.edu.cn', 'auth.dgut.edu.cn']
+   *   → 优学院全国站的接口在 apps./courseapi./classroomapi.ulearning.cn 上，
+   *     往这三个 dgut 域名写 cookie **完全没用**，App 发请求照样 401。
+   *
+   * 见 src/config/sites.ts 的 `hostsOfSite()`：它把该站点所有服务域名都列出来。
+   */
+  const hosts = hostsOfSite(getCurrentSite());
   let written = 0;
   let rejected = 0;
   const pairs = Object.entries(cookies).filter(([k, v]) => k && v);

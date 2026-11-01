@@ -18,6 +18,7 @@
  *                    ↓ 点进来
  *   ┌─ 小操作 ──────────────────────┐
  *   │  ✓ 签到                       │
+ *   │  ✎ 作业 / 投票  （只读探测）    │
  *   │  ± 加减分        （开发中）    │
  *   │  ⊘ 点不中        （开发中）    │
  *   └──────────────────────────────┘
@@ -58,6 +59,7 @@ import { LicensedScreen } from '../components/LicensedScreen';
 import { color, radius, spacing } from '../theme/tokens';
 import { useRouter } from '../nav/router';
 import { useUnlock } from '../state/unlockStore';
+import { BUILD_CONFIG } from '../config/buildConfig';
 
 export function XiaoCaoScreen() {
   return (
@@ -95,11 +97,81 @@ function XiaoCaoInner() {
             badge={entitled ? undefined : { text: '需授权', fg: color.warning[600], bg: color.warning[50] }}
             onPress={() => router.push('/sign-qr')}
           />
+          <View style={{ height: 1, backgroundColor: color.neutral[100] }} />
+          {/*
+            ★ 2026-11-01：以下三个入口（投票/答题、课堂 id、接口探测）**只在测试版显示**。
+            正式版（1.1.7 起）只保留稳定功能 + 体验修复，避免把实验性功能带给正式用户。
+            判断依据是版本号里有没有 `-test`（见 config/buildConfig.ts 的 isTestBuild 注释）。
+          */}
+          {BUILD_CONFIG.isTestBuild ? (
+            <>
+              {/*
+                ★ 「投票 / 答题」（2026-10 新增，真实功能页）。
+                能看到老师发的投票/答题；进行中的可以选答案提交。
+                接口来自优学院移动端 H5（见 services/interactionApi.ts）。
+              */}
+              <OpRow
+                glyph="🗳"
+                tint="#F59E0B"
+                label="投票 / 答题"
+                subLabel="看老师发的投票和答题；进行中的可以直接提交"
+                onPress={() => router.push('/vote-list')}
+              />
+              <View style={{ height: 1, backgroundColor: color.neutral[100] }} />
+              {/*
+                ★ 「课堂 id」查询（2026-10）。
+                投票/答题按课堂组织，但优学院不显示课堂 id ——
+                这页按课程列出历史用过的全部课堂 id，选一个就能去查。
+              */}
+              <OpRow
+                glyph="#"
+                tint="#0EA5E9"
+                label="课堂 id"
+                subLabel="按课程列出以往用过的课堂 id（查投票 / 答题要用）"
+                onPress={() => router.push('/classroom-ids')}
+              />
+              <View style={{ height: 1, backgroundColor: color.neutral[100] }} />
+              {/*
+                ★「作业 / 投票」接口探测（只读页，排查用）。
+              */}
+              <OpRow
+                glyph="✎"
+                tint={color.primary[500]}
+                label="作业 / 投票 接口探测"
+                subLabel="只读 GET 读取作业 / 投票接口的真实返回，不提交、不改数据"
+                onPress={() => router.push('/vote-homework')}
+              />
+            </>
+          ) : null}
         </Card>
       </Section>
 
-      {/* ---------- 课堂互动：加减分（开发中）/ 点不中（已实装） ---------- */}
+      {/* ---------- 课堂互动：目前只剩「加减分」（开发中） ---------- */}
+      {/*
+        ★ 2026-10 用户要求：「点不中功能先藏起来，以后再搞」。
+
+        所以这里**不再显示「点不中」入口** —— 但要注意：
+          · 页面本身（/dianbuzhong）和路由**都还在**，只是没有入口
+          · 以后要恢复，把下面注释掉的那段 OpRow 放回来即可
+          · 服务方法/接口一行没动，恢复时不用重做
+
+        为什么"藏入口"而不是删页面：用户说的是"以后再搞"，
+        这正是"暂时隐藏、保留能力"的场景 —— 删了反而以后要重写。
+      */}
       <Section title="课堂互动">
+        {/*
+          ★ 2026-11-01 用户要求：把「点不中」隐藏起来，并对外发公告
+          「功能维护中，暂已关闭通道」。所以这里显示一行状态说明，
+          入口本身保持隐藏（页面 /dianbuzhong 与路由都还在，恢复时把注释掉的 OpRow 放回来即可）。
+        */}
+        <Card style={{ marginBottom: spacing.sm }}>
+          <Row gap={spacing.sm} align="center">
+            <Badge text="维护中" fg={color.warning[600]} bg={color.warning[50]} />
+            <Txt variant="caption" c={color.text.secondary} style={{ flex: 1, lineHeight: 18 }}>
+              「点不中」功能维护中，通道已暂时关闭，恢复后会在这里通知。
+            </Txt>
+          </Row>
+        </Card>
         <Card style={{ padding: 0 }}>
           <OpRow
             glyph="±"
@@ -109,6 +181,7 @@ function XiaoCaoInner() {
             badge={{ text: '开发中', fg: color.neutral[500], bg: color.neutral[100] }}
             disabled
           />
+          {/* ── 「点不中」入口已按用户要求隐藏（2026-10，以后再做）──
           <View style={{ height: 1, backgroundColor: color.neutral[100] }} />
           <OpRow
             glyph="⊘"
@@ -117,6 +190,7 @@ function XiaoCaoInner() {
             subLabel="老师发起选人时，把自己从名单里剔除"
             onPress={() => router.push('/dianbuzhong')}
           />
+          */}
         </Card>
       </Section>
 

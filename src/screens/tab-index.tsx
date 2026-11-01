@@ -278,69 +278,79 @@ export function HomeScreen({ router }: TabScreenProps) {
           </Section>
         ) : null}
 
-        {/* ── 照片卡片（占屏幕一半） ── */}
+        {/* ── 照片卡片（占屏幕一半） ──
+            ⚠️ 2026-10 用户要求：「把首页换图片的换成一个固定的按钮，
+               不要一碰就让我换照片」。
+            → 整块**不再可点**（原来套了一层 Pressable，碰哪都能换照片，
+              很容易误触）；改成下面一个固定的「更换背景照片」按钮。
+        */}
         <Section style={{ marginTop: spacing.md }}>
-          <Pressable onPress={() => void pickPhoto()}>
-            <ImageBackground
-              source={photo ? { uri: photo } : undefined}
-              style={[styles.photoCard, { height: photoHeight }]}
-              imageStyle={styles.photoImage}
-            >
+          <ImageBackground
+            source={photo ? { uri: photo } : undefined}
+            style={[styles.photoCard, { height: photoHeight }]}
+            imageStyle={styles.photoImage}
+          >
+            {/*
+              没照片时只铺一层纯色，不叠渐变（否则会"上浅下深"分成两块）。
+              有照片时**也不加渐变遮罩** —— 需求：去掉照片下半部分的阴影。
+            */}
+            {!photo ? <View style={styles.photoFallback} pointerEvents="none" /> : null}
+
+            <View style={styles.photoContent}>
+              <View style={{ flex: 1 }} />
+
               {/*
-                没照片时只铺一层纯色，不叠渐变（否则会"上浅下深"分成两块）。
-                有照片时**也不加渐变遮罩** —— 需求：去掉照片下半部分的阴影。
+                去掉渐变遮罩后，白色文字在浅色照片上会看不清。
+                这里用**文字描边**（textShadow）兜底 ——
+                任何照片上都能读，又不会像遮罩那样压暗整块画面。
               */}
-              {!photo ? <View style={styles.photoFallback} pointerEvents="none" /> : null}
+              <Txt variant="h1" weight="bold" c="#FFFFFF" style={styles.onPhoto}>
+                {greeting(now)}
+              </Txt>
+              <Txt variant="body2" c="#FFFFFF" style={[styles.onPhoto, { marginTop: 4 }]}>
+                {formatFullDate(now)}
+              </Txt>
 
-              <View style={styles.photoContent}>
-                <View style={{ flex: 1 }} />
-
-                {/*
-                  去掉渐变遮罩后，白色文字在浅色照片上会看不清。
-                  这里用**文字描边**（textShadow）兜底 ——
-                  任何照片上都能读，又不会像遮罩那样压暗整块画面。
-                */}
-                <Txt variant="h1" weight="bold" c="#FFFFFF" style={styles.onPhoto}>
-                  {greeting(now)}
+              <Row gap={spacing.sm} align="center" style={{ marginTop: spacing.sm }}>
+                <Txt variant="body" c="#FFFFFF" style={styles.onPhoto}>
+                  {weather ? weather.icon : '🌡️'}
                 </Txt>
-                <Txt variant="body2" c="#FFFFFF" style={[styles.onPhoto, { marginTop: 4 }]}>
-                  {formatFullDate(now)}
+                <Txt
+                  variant="body2"
+                  c="#FFFFFF"
+                  numberOfLines={1}
+                  style={[styles.onPhoto, { flex: 1 }]}
+                >
+                  {weatherLine ?? (loading ? '正在获取天气…' : '未选择城市')}
                 </Txt>
-
-                <Row gap={spacing.sm} align="center" style={{ marginTop: spacing.sm }}>
-                  <Txt variant="body" c="#FFFFFF" style={styles.onPhoto}>
-                    {weather ? weather.icon : '🌡️'}
+                <Pressable
+                  onPress={() => setCityOpen(true)}
+                  hitSlop={10}
+                  style={{
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: 5,
+                    borderRadius: radius.full,
+                    backgroundColor: 'rgba(0,0,0,0.28)',
+                  }}
+                >
+                  <Txt variant="caption" c="#FFFFFF" weight="medium" style={styles.onPhoto}>
+                    {city ? '换城市' : '选城市'}
                   </Txt>
-                  <Txt
-                    variant="body2"
-                    c="#FFFFFF"
-                    numberOfLines={1}
-                    style={[styles.onPhoto, { flex: 1 }]}
-                  >
-                    {weatherLine ?? (loading ? '正在获取天气…' : '未选择城市')}
-                  </Txt>
-                  <Pressable
-                    onPress={() => setCityOpen(true)}
-                    hitSlop={10}
-                    style={{
-                      paddingHorizontal: spacing.md,
-                      paddingVertical: 5,
-                      borderRadius: radius.full,
-                      backgroundColor: 'rgba(0,0,0,0.28)',
-                    }}
-                  >
-                    <Txt variant="caption" c="#FFFFFF" weight="medium" style={styles.onPhoto}>
-                      {city ? '换城市' : '选城市'}
-                    </Txt>
-                  </Pressable>
-                </Row>
+                </Pressable>
+              </Row>
+            </View>
+          </ImageBackground>
 
-                <Txt variant="caption" c="#FFFFFF" style={[styles.onPhoto, { marginTop: spacing.md }]}>
-                  点一下更换背景照片
-                </Txt>
-              </View>
-            </ImageBackground>
-          </Pressable>
+          {/*
+            固定按钮：点它才换照片（不会误触）。
+            没照片时按钮文案是「添加背景照片」，有照片时是「更换背景照片」。
+          */}
+          <Spacer h={spacing.sm} />
+          <Button
+            label={photo ? '更换背景照片' : '添加背景照片'}
+            variant="secondary"
+            onPress={() => void pickPhoto()}
+          />
 
           {photoMsg ? (
             <>

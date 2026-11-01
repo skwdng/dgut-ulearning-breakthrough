@@ -19,22 +19,21 @@
  * 学号从 `USER_INFO` cookie 里解出来，解不到再让用户补。
  */
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, TextInput, View } from 'react-native';
 import { WebView, type WebViewNavigation } from 'react-native-webview';
-import { Banner, Button, Card, Col, Row, ScreenScroll, Section, Spacer, Txt } from '../components';
+import { Banner, Button, Card, Row, ScreenScroll, Section, Spacer, Txt } from '../components';
 import { color, spacing } from '../theme/tokens';
 import { getTenant } from '../config/tenants';
+import { getCurrentSite } from '../config/currentSite';
+import { hostsOfSite } from '../config/sites';
 import { useCheckin } from '../state/checkinStore';
 import { BUILD_CONFIG } from '../config/buildConfig';
 import { logFault } from '../services/crashLog';
 import {
   clearCookies,
-  diagnoseCookieRead,
-  nativeLogin,
   readSessionCookies,
   setCookieInManager,
 } from '../services/webCookie';
-import { HttpClient } from '../services/checkin/http';
 import { getServerBase } from '../services/serverClient';
 import { reportUserQueued } from '../services/reportQueue';
 
@@ -106,18 +105,23 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
   const { account, actions } = useCheckin();
   const tenant = getTenant(account?.tenant ?? BUILD_CONFIG.tenant);
 
+  /**
+   * ★ 登录入口的叫法要跟着**站点**走（2026-10 多站点改造的收尾）。
+   *
+   * ⚠️ 原来三处文案写死"学校登录页"：
+   *       · 「会打开**学校**的登录页面」
+   *       · 按钮「打开**学校**登录页」
+   *       · 加载中「正在打开**学校**登录页…」
+   *
+   *    这对东莞理工没问题，但**优学院中国站不是学校的页面** ——
+   *    它打开的是优学院官网（www.ulearning.cn）的账号密码登录页。
+   *    中国站用户看到"学校登录页"会以为自己选错了站点，直接退出。
+   */
+  const loginPageName = tenant.code === 'dgut' ? '学校登录页' : '优学院登录页';
+
   const [showWeb, setShowWeb] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: 'info' | 'error' | 'warning'; text: string } | null>(null);
-  const [cookieInfo, setCookieInfo] = useState('');
-  /** 实际从 CookieManager 读到的 cookie 名字 */
-  const [cookieNames, setCookieNames] = useState<string[]>([]);
-  const [diag, setDiag] = useState('');
-  const [probeOut, setProbeOut] = useState('');
-  const [traceId, setTraceId] = useState('');
-  const [tracePw, setTracePw] = useState('');
-  const [traceBusy, setTraceBusy] = useState(false);
-  const [sessionReady, setSessionReady] = useState(false);
   const [needId, setNeedId] = useState(false);
   const [manualId, setManualId] = useState('');
   const [pending, setPending] = useState<Record<string, string> | null>(null);
@@ -129,11 +133,37 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
   const [webCookieCount, setWebCookieCount] = useState(0);
   /** 页面内 cookie 的名字（显示出来便于判断有没有会话凭据） */
   const [webCookieNames, setWebCookieNames] = useState<string[]>([]);
-  /** 写入 CookieManager 的结果（成功/被拒次数） */
-  const [syncResult, setSyncResult] = useState('');
+  /**
+   * ★ WebView 加载失败的原因（2026-10 加）。
+   *
+   * ⚠️ 用户报「登录页打不开」时，界面上原来**一片空白** ——
+   *    既分不清是没网、域名解析失败，还是站点选错（东莞理工 / 中国站）。
+   *    把原生错误（`net::ERR_NAME_NOT_RESOLVED` / `ERR_CONNECTION_TIMED_OUT`）
+   *    或 HTTP 状态码，连同实际地址一起显示出来：
+   *    · 用户能自救（重试 / 换个浏览器打开）
+   *    · 反馈问题时也带上了关键证据，不用再猜。
+   *
+   * ⚠️ 默认 null —— 加载成功时横幅**不占任何空间**
+   *    （用户要求登录页只留登录口，不能为了诊断反过来把界面撑满）。
+   */
+  const [loadErr, setLoadErr] = useState<{ url: string; reason: string } | null>(null);
 
+  /**
+   * 要读写 cookie 的宿主列表。
+   *
+   * ══════════════ ★★★ 多站点改造（2026-10）══════════════
+   *
+   * 原来写死成 `[tenant.appHost, tenant.lmsHost, tenant.authHost]` ——
+   * 那三个域名是**东莞理工专有**的（application / lms / auth）。
+   *
+   * 优学院全国站没有 application，也没有 auth（没有 CAS），
+   * 而真正承载接口的是 `apps.ulearning.cn` / `courseapi.ulearning.cn` 这些子域。
+   * 只写 lms 一个域的话，App 发请求时**带不上 cookie** → 401。
+   *
+   * 所以改成从站点配置里算：`hostsOfSite()` 会把 services 里所有域名都列出来。
+   */
   const hosts = useMemo(() => {
-    const list = [tenant.appHost, tenant.lmsHost, tenant.authHost].filter(Boolean) as string[];
+    const list = hostsOfSite(getCurrentSite());
     return list;
   }, [tenant]);
 
@@ -277,8 +307,12 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
     webJarRef.current = jar;
     setWebCookieCount(names.length);
     setWebCookieNames(names);
-    const res = await setCookieInManager(jar);
-    setSyncResult(`写入 ${res.written} 次成功${res.rejected ? `，${res.rejected} 次被拒` : ''}`);
+    /**
+     * 写回 CookieManager（成功与否不影响保存会话 —— 会话优先用从这里拿到的 cookie）。
+     * ⚠️ 这里**故意不显示"写入 x 次成功/y 次被拒"**：用户要求登录页只留登录口，
+     *    这类诊断文字会把界面弄乱；真出问题用 /diagnostics 看。
+     */
+    await setCookieInManager(jar);
     /**
      * ══════════════ ★ 这里**不再**写崩溃日志 ══════════════
      *
@@ -293,7 +327,7 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
      *   各写一遍，**总有两个域名是白写的**（见 webCookie.ts 的实现）。
      *   会话真正的成败看下面那行 `写凭据 … 结果=成功`。
      *
-     * 所以改成只在界面上显示（`setSyncResult`），不写日志。
+     * 所以成功路径既不写崩溃日志，也不再往界面刷同步结果（登录页只管登录）。
      */
   }, []);
 
@@ -335,7 +369,6 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
            *    WebView 会重复发消息，一次登录刷五条，把真崩溃挤掉。
            *    会话成功与否界面上已有反馈。
            */
-          setCookieNames(Object.keys(fromWeb));
           // 顺便尝试写回 CookieManager（成功了更好，失败也不影响）
           void setCookieInManager(fromWeb);
           await saveSession(fromWeb, sidFinal);
@@ -343,7 +376,6 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
         }
         // 有会话但解不出学号 → 让用户补
         setPending(fromWeb);
-        setCookieNames(Object.keys(fromWeb));
         setNeedId(true);
         setMsg({ tone: 'info', text: '已拿到会话，但没能自动识别学号，请补填一次。' });
         return;
@@ -354,17 +386,12 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
         await setCookieInManager(fromWeb);
       }
 
-      // 同时跑一次诊断：区分"模块没被调用"和"调了但返回空"
-      const diag = await diagnoseCookieRead(hosts);
       const { cookies, detail } = await readCookies();
       const n = Object.keys(cookies).length;
       const names = Object.keys(cookies);
-      setCookieInfo(`${n} 个（${detail}）`);
-      setDiag(diag);
 
       // ★ 把"实际读到的 cookie 名字"显示出来 ——
       //   没有会话凭据时，最容易的判断就是看名字里有没有 AUTHORIZATION / USER_INFO。
-      if (n > 0) setCookieNames(names);
 
       if (!hasSession(cookies)) {
         if (auto) return;
@@ -386,7 +413,6 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
         return;
       }
 
-      setSessionReady(true);
       const sid = studentIdFromCookies(cookies);
       if (sid) {
         await saveSession(cookies, sid);
@@ -402,82 +428,7 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
     [account?.studentId, readCookies, saveSession, studentIdFromCandidates, syncFromWebView],
   );
 
-  /**
-   * 直接测一次 CAS 登录页请求，把真实响应打在界面上。
-   *
-   * 为什么需要：登录链路长期是"我这台机器能通、手机上不通"，
-   * 而手机浏览器打开又是正常的。没有真机响应就只能猜。
-   */
-  const runProbe = useCallback(async () => {
-    setProbeOut('正在请求…');
-    try {
-      const http = new HttpClient();
-      const service = `${tenant.appHost ?? tenant.lmsHost}${tenant.casServicePath}`;
-      const url = `${tenant.authHost}/authserver/login?service=${encodeURIComponent(service)}`;
-      const r = await http.probe(url);
-      // 同时测三种 redirect 模式 —— 决定能不能手动跟票
-      const modes = await http.probeRedirectModes(url);
-      setProbeOut(
-        `URL=${url}\n` +
-          `→ status=${r.status} 字节=${r.bytes}\n` +
-          `→ 最终地址=${r.finalUrl}\n` +
-          `→ content-type=${r.contentType}\n` +
-          `→ title="${r.title}"\n` +
-          `→ 有 pwdEncryptSalt=${r.hasSalt ? '是' : '否'} 有 execution=${r.hasExecution ? '是' : '否'}\n` +
-          `→ 引用了 encrypt.js=${r.hasEncryptJs ? '是' : '否'}\n` +
-          `→ set-cookie=${r.setCookies.join(' | ') || '(无)'}\n` +
-          `→ 首段=${r.head}\n\n` +
-          `=== redirect 模式对比（关键）===\n${modes}`,
-      );
-    } catch (e) {
-      setProbeOut(`请求异常：${(e as Error).message}`);
-    }
-  }, [tenant]);
 
-  /**
-   * 完整登录追踪（走**原生层**）。
-   *
-   * 为什么不用 JS 的 fetch：实测这台设备上
-   *   `follow` 会丢掉中间跳的 Set-Cookie（CASTGC 就没了），
-   *   `manual` 又不被支持 —— JS 层根本没法手动跟票。
-   * 原生 `HttpURLConnection` 可以逐跳控制，并把每一跳记录下来。
-   *
-   * ⚠️ 密码只用于这一次请求，不保存、不记录。
-   */
-  const runTrace = useCallback(async () => {
-    if (traceId.trim().length < 4 || !tracePw) {
-      setProbeOut('请先填学号和密码');
-      return;
-    }
-    setTraceBusy(true);
-    setProbeOut('正在追踪登录流程（原生）…');
-    try {
-      const service = `${tenant.appHost ?? tenant.lmsHost}${tenant.casServicePath}`;
-      const loginUrl = `${tenant.authHost}/authserver/login?service=${encodeURIComponent(service)}`;
-      const pw = tracePw;
-      const r = await nativeLogin(loginUrl, traceId.trim(), pw, 8);
-      setTracePw('');
-      if (!r) {
-        setProbeOut('原生模块不可用（非 Android 或模块未加载）');
-        return;
-      }
-      const lines: string[] = ['=== 原生逐跳跟票 ==='];
-      (r.steps ?? []).forEach((s) => lines.push(s));
-      const names = Object.keys(r.cookies ?? {});
-      lines.push('');
-      lines.push(`最终状态=${r.finalStatus}  最终地址=${r.finalUrl}`);
-      lines.push(`cookie ${names.length} 个: ${names.join(',') || '(空)'}`);
-      lines.push(`有 AUTHORIZATION=${names.includes('AUTHORIZATION') ? '是' : '否'}`);
-      lines.push(`有 CASTGC=${names.includes('CASTGC') ? '是' : '否'}`);
-      lines.push('');
-      lines.push(`最终页首段=${(r.finalBodyHead ?? '').slice(0, 300)}`);
-      setProbeOut(lines.join('\n'));
-    } catch (e) {
-      setProbeOut(`追踪异常：${(e as Error).message}`);
-    } finally {
-      setTraceBusy(false);
-    }
-  }, [tenant, traceId, tracePw]);
 
   const onNav = useCallback(
     (_nav: WebViewNavigation) => {
@@ -496,8 +447,39 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
     setMsg({ tone: 'info', text: '正在准备…' });
     await clearCookies();
     setMsg(null);
+    // 上一次登录留下的失败横幅不能带进这次
+    setLoadErr(null);
     setShowWeb(true);
   }, []);
+
+  /**
+   * 失败横幅上的「重试」：清掉旧错误再让 WebView 重新加载。
+   *
+   * ⚠️ 先清状态再 reload —— 重试是用户明确表示"再试一次"，
+   *    横幅应该立刻消失；等 `onLoadStart` 再清会有一瞬间的残留。
+   */
+  const retryLoad = useCallback(() => {
+    setLoadErr(null);
+    webRef.current?.reload();
+  }, []);
+
+  /**
+   * 失败横幅上的「用浏览器打开」：把入口地址交给系统浏览器。
+   *
+   * ⚠️ 必须接住异常 —— 设备上没有任何能处理 http 的应用时，
+   *    `Linking.openURL` 会 reject；不接就是未处理的 Promise（用户只觉得"点了没反应"）。
+   *    失败时至少留一条崩溃日志，方便事后查。
+   */
+  const openInBrowser = useCallback(async () => {
+    try {
+      await Linking.openURL(tenant.entryUrl);
+    } catch (e) {
+      logFault(
+        `[WebView登录] 打开系统浏览器失败：${(e as Error).message} url=${tenant.entryUrl}`,
+        'webLogin.openBrowser',
+      );
+    }
+  }, [tenant.entryUrl]);
 
   /* ─────────── 需要补学号 ─────────── */
   if (needId && pending) {
@@ -558,11 +540,11 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
             </Txt>
             <Spacer h={spacing.sm} />
             <Txt variant="small" c={color.text.secondary} style={{ lineHeight: 19 }}>
-              会打开学校的登录页面。你在里面正常登录即可 —— 支持短信验证码、动态码、微信登录。
+              {`会打开${loginPageName}。你在里面正常登录即可 —— 支持短信验证码、动态码、微信登录。\n`}
               App 不会接触你的密码，学号会自动识别。
             </Txt>
             <Spacer h={spacing.md} />
-            <Button label="打开学校登录页" onPress={() => void startLogin()} />
+            <Button label={`打开${loginPageName}`} onPress={() => void startLogin()} />
           </Card>
         </Section>
 
@@ -578,120 +560,65 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
   /* ─────────── WebView ─────────── */
   return (
     <View style={{ flex: 1, backgroundColor: color.background.secondary }}>
-      <View style={{ padding: spacing.md, backgroundColor: color.background.primary }}>
-        <Row gap={spacing.sm} align="center">
-          <Button
-            label={busy ? '保存中…' : '读取并保存会话'}
-            onPress={() => void harvest(false)}
-            disabled={busy}
-            style={{ flex: 1 }}
-          />
-          <Button label="返回" variant="secondary" onPress={() => setShowWeb(false)} />
-        </Row>
-        <Spacer h={spacing.sm} />
-        <Button
-          label="测试登录链路（直连）"
-          variant="secondary"
-          onPress={() => void runProbe()}
-        />
-
-        {/* ── 完整登录追踪 ──
-            只有它能看清 token 在哪一跳丢的。密码仅用于这一次请求。 */}
-        <Spacer h={spacing.sm} />
-        <Txt variant="caption" c={color.text.tertiary}>
-          完整追踪（填一次学号密码，用完即丢）
-        </Txt>
-        <Spacer h={6} />
-        <Row gap={spacing.sm}>
-          <TextInput
-            value={traceId}
-            onChangeText={setTraceId}
-            placeholder="学号"
-            placeholderTextColor={color.neutral[400]}
-            style={styles.miniInput}
-          />
-          <TextInput
-            value={tracePw}
-            onChangeText={setTracePw}
-            placeholder="密码"
-            placeholderTextColor={color.neutral[400]}
-            secureTextEntry
-            style={styles.miniInput}
-          />
-        </Row>
-        <Spacer h={6} />
-        <Button
-          label={traceBusy ? '追踪中…' : '开始追踪'}
-          variant="secondary"
-          onPress={() => void runTrace()}
-          disabled={traceBusy}
-        />
-        <Spacer h={6} />
-        <Txt variant="caption" c={sessionReady ? color.success[600] : color.text.tertiary} numberOfLines={2}>
-          {sessionReady ? '已读到会话凭据' : '已读到 Cookie：'}
-          {cookieInfo ? ` ${cookieInfo}` : ' —'}
-        </Txt>
-        {/* 从 WebView 页面内部同步到的 cookie（解决 CookieManager 读不到的问题） */}
-        {webCookieCount > 0 ? (
-          <Txt variant="caption" c={color.success[600]} numberOfLines={2}>
-            网页内读到 {webCookieCount} 个：{webCookieNames.slice(0, 10).join(', ')}
-            {syncResult ? `　→ ${syncResult}` : ''}
-          </Txt>
-        ) : null}
-        {/* 实际从 CookieManager 读到的名字 —— 判断有没有会话凭据最直接 */}
-        {cookieNames.length > 0 ? (
-          <Txt variant="caption" c={color.text.tertiary} numberOfLines={2}>
-            原生读到 {cookieNames.length} 个：{cookieNames.slice(0, 10).join(', ')}
-          </Txt>
-        ) : null}
-        {/* 原生模块诊断：区分"模块没被调用"与"调了但返回空" */}
-        {diag ? (
-          <Txt variant="caption" c={color.text.tertiary} numberOfLines={3}>
-            模块：{diag}
-          </Txt>
-        ) : null}
-      </View>
-
       {msg ? (
         <Pressable onPress={() => setMsg(null)}>
           <Banner tone={msg.tone} title={msg.text} />
         </Pressable>
       ) : null}
 
-      {/* 诊断结果：用**独立可滚动浮层**显示。
-          以前直接塞在页面里，内容一多就看不全了。 */}
-      <Modal visible={Boolean(probeOut)} animationType="slide" onRequestClose={() => setProbeOut('')}>
-        <View style={{ flex: 1, backgroundColor: color.background.secondary }}>
-          <View
-            style={{
-              padding: spacing.md,
-              backgroundColor: color.background.primary,
-              borderBottomWidth: 1,
-              borderBottomColor: color.neutral[200],
-            }}
-          >
-            <Row justify="space-between" align="center">
-              <Txt variant="body" weight="semibold">
-                诊断结果（可上下滚动）
-              </Txt>
-              <Pressable onPress={() => setProbeOut('')} hitSlop={10}>
-                <Txt variant="body2" c={color.primary[500]} weight="medium">
-                  关闭
-                </Txt>
-              </Pressable>
-            </Row>
-          </View>
-          <ScrollView contentContainerStyle={{ padding: spacing.md }}>
-            <Txt variant="caption" c={color.text.primary} style={{ lineHeight: 17 }}>
-              {probeOut}
-            </Txt>
-          </ScrollView>
+      {/*
+        ★ 加载失败横幅（2026-10 加）。
+        ⚠️ 只有 `loadErr` 非空才渲染 —— 正常加载时这里**完全不占高度**，
+           不破坏"登录页只留登录口"的精简布局。
+        ⚠️ 必须放在 WebView **上方**：失败时 WebView 只有一片白，
+           用户要先看到原因和自救按钮，才知道下一步做什么。
+      */}
+      {loadErr ? (
+        <View>
+          <Banner
+            tone="error"
+            title="登录页没能打开"
+            message={
+              `地址：${loadErr.url}\n` +
+              `原因：${loadErr.reason}\n` +
+              '先确认手机能联网、站点选对；还是打不开，就用「用浏览器打开」试试。'
+            }
+          />
+          <Row gap={spacing.sm} style={{ marginTop: spacing.sm, paddingHorizontal: spacing.base }}>
+            <Button label="重试" onPress={retryLoad} style={{ flex: 1 }} />
+            <Button
+              label="用浏览器打开"
+              variant="secondary"
+              onPress={() => void openInBrowser()}
+              style={{ flex: 1 }}
+            />
+          </Row>
         </View>
-      </Modal>
+      ) : null}
 
       <WebView
         ref={webRef}
         source={{ uri: tenant.entryUrl }}
+        /** 每次开始加载都清掉上一次的失败横幅，否则重试成功后旧错误会残留在页面上 */
+        onLoadStart={() => setLoadErr(null)}
+        /**
+         * ★ 加载失败要说出原因（2026-10 加）。
+         *   description 形如 `net::ERR_NAME_NOT_RESOLVED` / `net::ERR_CONNECTION_TIMED_OUT` ——
+         *   这些正是判断"没网 / 域名解析失败 / 站点选错"最关键的证据。
+         */
+        onError={(e) => {
+          const reason = e.nativeEvent?.description || `加载错误（code ${e.nativeEvent?.code ?? 0}）`;
+          const url = e.nativeEvent?.url || tenant.entryUrl;
+          setLoadErr({ url, reason });
+          logFault(`[WebView登录] onError ${reason} url=${url}`, 'webLogin.onError');
+        }}
+        /** 服务器返回 4xx/5xx 时同样要说清状态码（页面可能是错误页而不是白屏） */
+        onHttpError={(e) => {
+          const code = e.nativeEvent?.statusCode ?? 0;
+          const url = e.nativeEvent?.url || tenant.entryUrl;
+          setLoadErr({ url, reason: `服务器返回 HTTP ${code}` });
+          logFault(`[WebView登录] onHttpError HTTP ${code} url=${url}`, 'webLogin.onHttpError');
+        }}
         /**
          * ★ 接收页面里注入的 JS 回传的 cookie。
          *   这是解决"网页已登录但 CookieManager 读到 0 个"的关键 ——
@@ -735,7 +662,7 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator color={color.primary[500]} />
             <Txt variant="small" c={color.text.tertiary} style={{ marginTop: spacing.sm }}>
-              正在打开学校登录页…
+              正在打开{loginPageName}…
             </Txt>
           </View>
         )}
@@ -745,16 +672,3 @@ export function YouxueWebLoginScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
-  miniInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: color.neutral[200],
-    borderRadius: 8,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 7,
-    fontSize: 14,
-    color: color.text.primary,
-    backgroundColor: color.neutral[50],
-  },
-});

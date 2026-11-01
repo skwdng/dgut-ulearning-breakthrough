@@ -34,6 +34,7 @@ import type { NeedMfaSignal } from '../services/checkin/types';
 import { backoffMs, CIRCUIT_BREAK_MS, CIRCUIT_THRESHOLD, RATE_LIMIT_BACKOFF_MS } from '../services/checkin/errors';
 import { decideTier, submitDelay } from '../services/checkin/scheduler';
 import { store, STORE_KEYS } from '../services/storage';
+import { loadCurrentSite } from '../config/currentSite';
 /** ★ 启动计时打点 —— 用于定位"更新后进去要等一阵" */
 import { mark } from '../services/startupTiming';
 
@@ -285,6 +286,20 @@ export function CheckinProvider({ children }: { children: React.ReactNode }) {
   // 账号相关的数据（课程/任务/历史）按账号分 key —— 见下面持久化写入的注释
   useEffect(() => {
     (async () => {
+      /**
+       * ★★★ 先读「用户选的优学院站点」（多站点改造，2026-10）。
+       *
+       * ⚠️ 必须**在账号之前**读，而且必须 await 完再继续：
+       *    账号里存的 `tenant` 只是"登录时用的站点"，而真正决定
+       *    **请求打哪个域名**的是 `getCurrentSite()`。如果站点还没灌进来
+       *    就去查课程/签到，请求会打到默认站点（东莞理工）→ 对
+       *    中国站账号来说必然是 401。
+       *
+       * ⚠️ 读失败不报错（`loadCurrentSite` 内部已兜底）——
+       *    站点读不出来就用打包默认站点，不能让 App 起不来。
+       */
+      await loadCurrentSite();
+
       const [account, plan, settings] = await Promise.all([
         store.get<YouxueAccount | null>(STORE_KEYS.account, null),
         store.get<PollPlan>(STORE_KEYS.pollPlan, DEFAULT_POLL_PLAN),

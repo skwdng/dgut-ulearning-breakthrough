@@ -8,6 +8,7 @@
  */
 import type { TenantCode } from '../../domain/types';
 import { BUILD_CONFIG, type AdapterKind } from '../../config/buildConfig';
+import { getCurrentSite } from '../../config/currentSite';
 import { MockCheckinAdapter } from './mockAdapter';
 import { YouxueCheckinAdapter } from './youxueAdapter';
 import type { CheckinAdapter } from './types';
@@ -18,8 +19,16 @@ export function currentAdapterKind(): AdapterKind {
   return BUILD_CONFIG.adapter;
 }
 
+/**
+ * 当前"租户"= **用户选的优学院站点**。
+ *
+ * ⚠️ 原来返回 `BUILD_CONFIG.tenant`（打包常量 `'dgut'`）。
+ *    但多站点改造后，站点是**运行时可选**的（东莞理工 / 优学院中国站），
+ *    所以必须从 `getCurrentSite()` 取 —— 否则换了站点，
+ *    账号的 `tenant` 字段还是 dgut，适配器会去连东莞理工的域名。
+ */
 export function resolveTenant(): TenantCode {
-  return BUILD_CONFIG.tenant as TenantCode;
+  return getCurrentSite().code as TenantCode;
 }
 
 let cached: CheckinAdapter | null = null;

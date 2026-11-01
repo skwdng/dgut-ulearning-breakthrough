@@ -55,15 +55,33 @@ console.log('=== 1) ★★ 绑定页不再放"学号+密码"表单（它原理�
   t('★★ 没有学号输入框', !/label="学号"/.test(BIND_CODE));
   t('★★ 没有调用 nativeLogin（那条路走不通）', !/nativeLogin\(/.test(BIND_CODE));
   t('★ 没有 bindWithSession（登录动作不在这个页面了）', !/bindWithSession/.test(BIND_CODE));
-  t('★★ 主入口就是网页登录', /打开登录页面/.test(BIND_CODE));
-  t('★ 主入口跳到 /youxue-web-login', /router\.push\('\/youxue-web-login'\)/.test(BIND_CODE));
+  /**
+   * ══════════════ ★★★ 这条改过两次 ══════════════
+   *
+   * 最初钉「主入口就是网页登录」，按钮文案「打开登录页面」。
+   * 多站点改造时变成两个按钮（东莞理工 / 优学院中国站）。
+   *
+   * 用户最新要求（2026-10）：
+   *   「登录优学院下面这一块只留打开登录页面按钮，下面的全部删掉」
+   * → 又回到**一个按钮**，文案固定「打开登录页面」，两站说明/当前站点都删了。
+   *
+   * 要盯的核心没变：**页面本身不放学号密码表单**，登录一律走网页。
+   */
+  t('★★ 主入口仍是网页登录（只有一个「打开登录页面」按钮）', /label="打开登录页面"/.test(BIND_CODE));
+  t(
+    '★★ 登录页不再列站点说明（用户要求只留按钮）',
+    !/东莞理工学院（学校统一认证）/.test(BIND_CODE) && !/当前站点：/.test(BIND_CODE),
+  );
+  t('★ 跳转集中于 pickSiteAndLogin（不在按钮上散着写）', /const pickSiteAndLogin/.test(BIND_CODE));
+  t('★ 跳转目标仍是 /youxue-web-login', /router\.push\('\/youxue-web-login'\)/.test(BIND_CODE));
 
   /**
-   * ★ 只留一个入口 —— 不能再有"主入口 + 备用入口"两套，
-   *   那样用户还是会先撞墙。
+   * ★ 登录入口只能有一处跳转。
+   *   多站点后仍然是 1 处（都在 pickSiteAndLogin 里），
+   *   如果变成 2 处说明有人又加了"备用入口"。
    */
   const pushes = (BIND_CODE.match(/router\.push\('\/youxue-web-login'\)/g) ?? []).length;
-  t('★ 只有一处登录入口按钮（不再有"备用"第二处）', pushes === 1, `${pushes} 处`);
+  t('★ 只有一处跳转（两个按钮共用它，不再有"备用"第二处）', pushes === 1, `${pushes} 处`);
 
   t('★★ 注释记录了为什么去掉（JS 动态渲染、静态页无 password）', /没有 password 输入框|根本没有 password/.test(BIND));
   t('★ 注释里保留了实测证据（手机/桌面 UA 的差异）', /dynamicLogin/.test(BIND) && /fidoLogin/.test(BIND));

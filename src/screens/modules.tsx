@@ -109,16 +109,7 @@ export function ModulesScreen() {
           </Card>
         </Section>
       ))}
-
-      <Section title="说明">
-        <Card>
-          <Txt variant="caption" c={color.text.tertiary}>
-            • 「用户选择优先」：你主动开启的模块即使平台不支持也会保留显示，方便你看到原因。{'\n'}
-            • 模块会声明自己需要的能力（通知/相机/定位/通知使用权），缺少时标注「待授权」而不是直接报错。{'\n'}
-            • 关闭模块只是从首页隐藏，不会删除已有数据。
-          </Txt>
-        </Card>
-      </Section>
+      {/* 用户要求（2026-10）：「功能模块下的说明也删掉」—— 说明整块已移除 */}
     </ScreenScroll>
   );
 }

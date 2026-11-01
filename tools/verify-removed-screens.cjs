@@ -146,14 +146,19 @@ console.log('\n=== 3) ★★★ 小操作页：两张入口卡片必须删掉，
   t('★★★ 小操作页没有 push 到 /api-tester', !/push\('\/api-tester'\)/.test(XIAOCAO_CODE));
   t('★★★ 小操作页没有 push 到 /crash-log', !/push\('\/crash-log'\)/.test(XIAOCAO_CODE));
   /**
-   * ⚠️ 防"删过头"：这一页里**该留的**功能入口（签到记录 / 加减分 / 点不中）
-   *    一个都不能少 —— 删两张相邻卡片时最容易手滑带走第三张。
+   * ⚠️ 防"删过头"：这一页里**该留的**功能入口（签到记录 / 加减分）一个都不能少
+   *    —— 删相邻卡片时最容易手滑带走别的。
+   *
+   * ★ 2026-10-30 用户又要求「点不中功能先藏起来，以后再搞」：
+   *   所以「点不中」入口现在**应当消失**，但页面与路由必须保留
+   *   （那是"暂时隐藏"，不是"删除能力"）。
    */
   t('★★ 该留的入口还在：签到记录', /label="签到记录"/.test(XIAOCAO_CODE));
   t('★★ 该留的入口还在：加减分', /label="加减分"/.test(XIAOCAO_CODE));
+  t('★★ 点不中入口已按用户要求隐藏', !/label="点不中"/.test(XIAOCAO_CODE) && !/push\('\/dianbuzhong'\)/.test(XIAOCAO_CODE));
   t(
-    '★★ 该留的入口还在：点不中（且能点，跳 /dianbuzhong）',
-    /label="点不中"/.test(XIAOCAO_CODE) && /push\('\/dianbuzhong'\)/.test(XIAOCAO_CODE),
+    '★★★ 但 /dianbuzhong 页面与路由保留（以后恢复入口即可用）',
+    /'\/dianbuzhong'/.test(read('src/nav/screens.tsx')) && /'\/dianbuzhong'/.test(read('src/nav/router.tsx')),
   );
 }
 
@@ -162,10 +167,16 @@ console.log('\n=== 4) ★★ 设置页：崩溃日志入口也没了，但"能�
   t('★★★ 设置页没有 push 到 /crash-log', !/push\('\/crash-log'\)/.test(SETTINGS_CODE));
   t('★★ 设置页代码里完全不出现 /crash-log', !/'\/crash-log'/.test(SETTINGS_CODE));
   /**
-   * ⚠️ 崩了还是得能看 —— 只是换到「诊断信息」页。
-   *    这个入口不许跟着一起删（那才叫删过头）。
+   * ⚠️ 用户后来（2026-10）又要求精简设置页：
+   *   「设置页其他板块只留功能模块和优学院账号，下面的说明也删掉」
+   * → 「诊断信息」入口**也从设置页撤了**（页面本身还在，只是不再给入口）。
+   *
+   * 所以这里改钉两件事，防"删过头"也防"只删一半"：
+   *   ① 设置页确实不再有 /diagnostics 入口（用户要的）
+   *   ② /diagnostics **页面与路由仍在**（能力没删，需要时还能进）
    */
-  t('★★ 诊断信息入口仍在（崩溃记录改从这里看）', /push\('\/diagnostics'\)/.test(SETTINGS_CODE));
+  t('★★ 设置页不再有诊断信息入口（用户要求只留两项）', !/push\('\/diagnostics'\)/.test(SETTINGS_CODE));
+  t('★★ 但 /diagnostics 页面与路由仍在（能力没删）', /'\/diagnostics'/.test(SCREENS_CODE) && /'\/diagnostics'/.test(ROUTER_CODE));
 }
 
 console.log('\n=== 5) ★★★ 防误删：底层能力必须还在（删的是界面，不是能力）===');

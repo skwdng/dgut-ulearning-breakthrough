@@ -78,6 +78,14 @@
  * ⑤ 只写路径、用一个固定主机去拼 —— 见下面"主机与前缀都对才行"。
  */
 
+/**
+ * ★ 多站点改造（2026-10）：主机不再写死，按**当前站点**给。
+ * 见 src/config/sites.ts —— 东莞理工是"路径前缀模式"，
+ * 优学院中国站是"子域名模式"，两者的主机完全不同。
+ */
+import { getCurrentSite } from '../../config/currentSite';
+import { resolvePath } from '../../config/sites';
+
 /** HttpClient 的最小接口（避免 import 具体类引起循环依赖） */
 export interface ProbeHttp {
   get(url: string, opts?: { headers?: Record<string, string> }): Promise<{ status: number; body: string }>;
@@ -246,14 +254,56 @@ interface Discovered {
  *   ③ 这些子域解析到**同一个 IP**，靠 **Host 头**分流到不同后端。
  *      所以"同一条路径挂不同主机"是有意义的对照。
  */
-export const YX_HOSTS = {
-  /** ★ 实测可用的接口主机（`/apps/selectperson/*`、`/apps/classscore/*`） */
-  lms: 'https://lms.dgut.edu.cn',
-  /** Reqable 抓到的 Host（同 IP，前端也用它）—— 留档对照 */
-  aijx: 'https://aijx.dgut.edu.cn',
-  /** ⚠️ 已证伪（SPA 页面主机，不是接口）—— 仅留档 */
-  app: 'https://application.dgut.edu.cn',
-} as const;
+/**
+ * 接口主机 —— **按当前站点动态给**，不再写死东莞理工。
+ *
+ * ══════════════ ★★★ 多站点改造（2026-10，用户提出）══════════════
+ *
+ *   「现在有一个优学院走的中国站点不是东莞理工站点的，怎么改」
+ *
+ * 原来这里写死三个域名：
+ *     lms: 'https://lms.dgut.edu.cn'          （实测可用）
+ *     aijx: 'https://aijx.dgut.edu.cn'        （Reqable 抓到的 Host，留档）
+ *     app: 'https://application.dgut.edu.cn'  （已证伪，SPA 页面主机）
+ *
+ * 问题：换到优学院中国站，这两个"留档对照"域名根本不存在，
+ *       而真正的接口在 `apps.ulearning.cn` / `classroomapi.ulearning.cn`。
+ *
+ * ⚠️ 注释里那三段"实测记录"仍然有效（它们记录的是**东莞理工站**的事实），
+ *    保留在原注释里以免丢失踩坑历史。
+ *
+ * ══════════════ 原注释（东莞理工站的事实，留档）══════════════
+ *
+ *   ● `aijx.dgut.edu.cn` 与 `lms.dgut.edu.cn` 解析到**同一个 IP**（27.39.220.17），
+ *     靠 **Host 头**分流 —— 所以"同一条路径挂不同主机"是有意义的对照。
+ *   ● `application.dgut.edu.cn` 是 **DGUT 定制网关**（`/appapi` 前缀），
+ *     不是优学院通用前缀，中国站没有。
+ */
+export function yxHosts(): {
+  /** ★ 当前站点的 lms 基址（路径前缀模式下它承载所有服务） */
+  lms: string;
+  /** ★ 移动端网关（签到/选人/用户）—— 子域名模式下是独立域名 */
+  apps: string;
+  /** ★ 课程/课堂活动 */
+  courseApi: string;
+  /** ★ 智慧课堂 */
+  classroomApi: string;
+} {
+  const s = getCurrentSite().services;
+  return {
+    lms: s.lms,
+    apps: s.apps,
+    courseApi: s.courseApi,
+    classroomApi: s.classroomApi,
+  };
+}
+
+/**
+ * ⚠️ 兼容旧引用：以前是常量，现在是函数。
+ *    如果还有地方按 `YX_HOSTS.lms` 用，请改成 `yxHosts().lms`。
+ */
+export const YX_HOSTS_LEGACY_NOTE =
+  '已改为函数 yxHosts()（按当前站点返回），不要再用固定域名常量。';
 
 /**
  * ★ 学生角色 id（Reqable 实测：`roleId=9`）。
@@ -278,9 +328,11 @@ async function discover(
   classroomId: number,
 ): Promise<Discovered> {
   const out: Discovered = { raw: '' };
-  const url =
-    `${YX_HOSTS.lms}/apps/wisdomClassroom/student/classroomActivitys` +
-    `?classroomId=${classroomId}&pageSize=999&pageNum=1&type=1&_t=${Date.now()}`;
+  const url = resolvePath(
+    getCurrentSite(),
+    `/apps/wisdomClassroom/student/classroomActivitys` +
+      `?classroomId=${classroomId}&pageSize=999&pageNum=1&type=1&_t=${Date.now()}`,
+  );
   try {
     const res = await http.get(url, { headers });
     out.raw = String(res.body ?? '');
@@ -337,7 +389,7 @@ export async function probeYouxueActivityApi(
    *   · 它返回 200 → 会话/主机/前缀这一整套都对，后面任何反常都能归因到路径
    *   · 它不是 200 → 问题在会话或主机，别管后面的路径了，先解决这个
    */
-  const baselineUrl = `${YX_HOSTS.lms}/apps/user/getUserByUserID/${ctx.userId}`;
+  const baselineUrl = resolvePath(getCurrentSite(), `/apps/user/getUserByUserID/${ctx.userId}`);
   try {
     const res = await http.get(baselineUrl, { headers });
     const body = String(res.body ?? '');
@@ -477,7 +529,7 @@ export async function probeYouxueActivityApi(
   const L = (group: string, label: string, path: string, note?: string): Cand => ({
     group,
     label,
-    url: `${YX_HOSTS.lms}${path}`,
+    url: resolvePath(getCurrentSite(), path),
     path,
     note,
   });

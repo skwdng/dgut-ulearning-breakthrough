@@ -213,6 +213,15 @@ export const STORE_KEYS = {
   signOverview: 'signOverview',
   // ---- 插件解锁码（一人一码） ----
   unlockCode: 'unlockCode',
+  /**
+   * ★ 选中的优学院站点（`dgut` / `ulearning-cn`）。
+   *
+   * ⚠️ 为什么要可配置：优学院是 SaaS，不同学校/全国站的**域名和 API 模式不同**
+   *    （东莞理工是路径前缀 `lms.dgut.edu.cn/apps`，
+   *      中国站是子域名 `apps.ulearning.cn`）。
+   *    写死的话就得为每个站点打一个包。见 src/config/sites.ts。
+   */
+  youxueSite: 'youxueSite',
   // ---- 天气缓存 ----
   weather: 'weather',
   // ---- 崩溃日志 ----
@@ -233,4 +242,25 @@ export const STORE_KEYS = {
    *    发了 0.18 他就再也看不到弹窗，会漏掉更新。
    */
   updatePromptDismissed: 'updatePromptDismissed',
+  /**
+   * ★ 小c 的本地向量索引（RAG 缓存，2026-10）。
+   *
+   * 存 `{ v:1, model, items:[{id,text,vec:number[]}] }`。
+   *
+   * ⚠️ 为什么放在手机本地：
+   *    向量是从外卖订单、签到记录算出来的 ——
+   *    存到服务器就等于把"谁吃过什么、谁没到课"交出去了。
+   *    这里是一份只在本机使用的缓存；没数据时重算即可。
+   */
+  aiRagIndex: 'aiRagIndex',
+  /**
+   * ★ 小c 的对话记录（2026-10，真机反馈"切走了就丢"）。
+   *
+   * 存最近的若干条消息 `{id, role, text}[]`。
+   *
+   * ⚠️ 为什么要落盘：AI 页是 tab，切到别的 tab 会**卸载组件**，
+   *    useState 里的消息全没 —— 用户切回来看到刚聊的都没了，以为坏了。
+   *    这里只留最近 40 条，避免无限膨胀。
+   */
+  aiChatHistory: 'aiChatHistory',
 } as const;

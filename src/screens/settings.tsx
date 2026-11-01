@@ -292,6 +292,23 @@ export function SettingsScreen() {
               : ' 尚未校验过。填一次万能码即可看到来源（服务器 / 内置）。'}
           </Txt>
         </Card>
+
+        {/*
+          ★ 服务器用户管理（2026-10 新增）
+          用户需求：「把某个账号踢出我的服务器，别人查的时候找不到我」
+
+          ⚠️ 入口放在「管理服务器」这一节里，因为它是**管理员操作** ——
+             普通使用者不需要看到；点进去要用**管理口令**（HTTP Basic）。
+        */}
+        <Spacer h={spacing.sm} />
+        <Card style={{ padding: 0 }}>
+          <SettingRow
+            icon="👥"
+            label="服务器用户管理"
+            subLabel="踢出某个账号：删掉记录后，对方 App 查不到授权"
+            onPress={() => router.push('/server-admin')}
+          />
+        </Card>
       </Section>
 
       {/*
@@ -496,7 +513,10 @@ export function SettingsScreen() {
         </Card>
       </Section>
 
-      {/* ── 其他设置入口 ── */}
+      {/* ── 其他设置入口 ──
+          用户要求（2026-10）：「设置页其他板块只留功能模块和优学院账号，
+          下面的说明也删掉」→ 签到日志 / 诊断信息 / 授权详情 三个入口已移除，
+          页面本身还在（路由保留，只是这里不给入口）。 */}
       <Section title="其他">
         <Card style={{ padding: 0 }}>
           <SettingRow
@@ -511,42 +531,7 @@ export function SettingsScreen() {
             label="优学院账号"
             subLabel={account ? `${account.studentName?.trim() || '已绑定'} · 已连接` : '未绑定'}
             onPress={() => router.push('/youxue-bind')}
-            divider
           />
-          <SettingRow
-            icon="📜"
-            label="签到日志"
-            subLabel="查看历史提交记录"
-            onPress={() => router.push('/checkin-log')}
-            divider
-          />
-          {/*
-            ⚠️ 这里原来还有一个「崩溃日志」入口（指向 /crash-log）。
-               用户要求删掉崩溃日志 —— 入口和页面都删了。
-               底层记录仍在写（crashLog.ts 的 logFault 被 9 个模块调用），
-               要看就用下面的「诊断信息」。
-          */}
-          <SettingRow
-            icon="🔍"
-            label="诊断信息"
-            subLabel="界面留白、账号状态、登录凭据的真实数值"
-            onPress={() => router.push('/diagnostics')}
-          />
-          <SettingRow
-            icon="🛡"
-            label="授权详情"
-            subLabel="旧的名单校验方式（兼容保留）"
-            onPress={() => router.push('/license')}
-          />
-        </Card>
-      </Section>
-
-      <Section>
-        <Card>
-          <Txt variant="small" c={color.text.tertiary} style={{ lineHeight: 18 }}>
-            说明：授权码在**本地校验**，密钥编译在 App 里。这套机制防的是「转借」与「误传」，
-            不是对抗逆向。真要强防护必须上服务端校验。
-          </Txt>
         </Card>
       </Section>
     </ScreenScroll>

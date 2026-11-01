@@ -47,8 +47,14 @@ export const DEPRECATED_ENDPOINTS = {
   history: '/api/rollcall/history',
 } as const;
 
-/** 智慧课堂（独立鉴权，学生无账号，本适配器不使用） */
-export const SMART_CLASSROOM_HOST = 'https://zhlb.dgut.edu.cn';
+/**
+ * 智慧课堂（独立鉴权，学生无账号，本适配器不使用）。
+ *
+ * ⚠️ **东莞理工专有域名**（`zhlb.` = 智慧录播）。优学院全国站没有这个站，
+ *    所以不要把它当成通用常量用 —— 目前全项目**没有任何地方引用它**，
+ *    保留只为留档。
+ */
+export const SMART_CLASSROOM_HOST_DGUT_ONLY = 'https://zhlb.dgut.edu.cn';
 
 interface StoredCredential {
   mode: 'session' | 'password';

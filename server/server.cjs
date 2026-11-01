@@ -538,6 +538,41 @@ function html(res, code, text) {
   res.end(text);
 }
 
+/**
+ * ══════════════ ★ 小c AI 服务反向代理（2026-10）══════════════
+ *
+ * 为什么要代理：小c 的 Python/Node 服务监听 8789，但**云服务器的安全组
+ * 只放行了 8787/8788** —— 从外网连 8789 会直接超时。
+ * 与其让用户去云控制台开端口（还得教一遍），不如**复用 8787**：
+ * 本进程把 `/ai/*` 转发给 127.0.0.1:8789。
+ *
+ * ⚠️ 这个路径**不走管理口令**（`isProtected` 里没有 `/ai`）：
+ *    小c 的调用方是 App，口令放进 APK 等于公开。
+ *    真正的鉴权在 ai-server 内部：拿 studentId 去问本机的 `/api/auth-state`。
+ *
+ * ⚠️ 转发时**原样流式转发**（不解析 JSON）：
+ *    聊天请求可能几百毫秒到几分钟，攒完再发会拖慢首字；
+ *    而且我们不需要理解内容，透传最不容易出 bug。
+ */
+function proxyToAi(req, res) {
+  const target = { host: '127.0.0.1', port: Number(process.env.AI_PORT || 8789), path: req.url };
+  const upstream = http.request(
+    { ...target, method: req.method, headers: { ...req.headers, host: `${target.host}:${target.port}` } },
+    (up) => {
+      res.writeHead(up.statusCode || 502, up.headers);
+      up.pipe(res);
+    },
+  );
+  upstream.on('error', (e) => {
+    // 小c 服务没起时给出可读原因，而不是挂住
+    json(res, 502, {
+      ok: false,
+      error: `小c 服务不可用（${e.code || e.message}）。服务器上跑一下 systemctl status lifekit-ai`,
+    });
+  });
+  req.pipe(upstream);
+}
+
 function readBody(req) {
   return new Promise((resolve) => {
     const chunks = [];
@@ -610,6 +645,55 @@ const server = http.createServer(async (req, res) => {
 
   // 预检
   if (req.method === 'OPTIONS') return json(res, 204, {});
+
+  /**
+   * ★ 小c AI 服务（2026-10）：`/ai/*` 反向代理到 127.0.0.1:8789
+   *
+   * ⚠️ 必须在**管理口令校验之前**：
+   *    这个路径是 App 调用的，不能要管理口令（口令放进 APK 等于公开）。
+   *    鉴权由 ai-server 自己做（拿 studentId 去问本机的 /api/auth-state）。
+   *
+   * ⚠️ 为什么代理而不是直接开 8789：云安全组只放行了 8787/8788，
+   *    外网连 8789 会超时；复用已开放的 8787 最省事。
+   */
+  if (p === '/ai' || p.startsWith('/ai/')) {
+    return proxyToAi(req, res);
+  }
+
+  /**
+   * ══════════════ ★ 客户端崩溃上报（2026-10）══════════════
+   *
+   * 为什么需要它：用户反馈「更新后点进去马上退出来」—— 真机闪退，
+   * 而手机没连电脑、没法 `adb logcat`，本地也没有日志。
+   * 于是让 App 在**崩溃那一刻**把错误 POST 上来，落到服务器文件里，
+   * 我们直接看文件就知道崩在哪一行。
+   *
+   * ⚠️ 这个接口**不能要口令**（App 在崩溃处理里调用，带不了凭据）；
+   *    所以只做两件事：长度截断 + 写入日志。它不读任何用户数据，
+   *    也不回传任何东西（返回 ok:true 即可）。
+   * ⚠️ 不进入 `isProtected` 白名单，靠上面这个提前 return 放行。
+   */
+  if (p === '/api/client-log' && req.method === 'POST') {
+    try {
+      const body = await readBody(req);
+      const entry = {
+        at: new Date().toISOString(),
+        ip: req.socket?.remoteAddress ?? '',
+        app: clean(body.app, 40),
+        version: clean(body.version, 40),
+        versionCode: Number(body.versionCode) || -1,
+        stage: clean(body.stage, 60),
+        message: clean(body.message, 2000),
+        stack: clean(body.stack, 4000),
+        extra: clean(body.extra, 1000),
+      };
+      const logFile = path.join(path.dirname(DATA_FILE), 'client-errors.log');
+      fs.appendFileSync(logFile, `${JSON.stringify(entry)}\n`, 'utf8');
+      return json(res, 200, { ok: true });
+    } catch (e) {
+      return json(res, 500, { ok: false, error: String(e && e.message ? e.message : e) });
+    }
+  }
 
   /**
    * ── 管理口令 ──

@@ -38,7 +38,24 @@ const ADAPTER: AdapterKind = 'youxue';
 /** 租户（决定域名与适配器实现） */
 const TENANT = 'dgut';
 
-/** 优学院域名配置（写死，同样不依赖环境变量） */
+/**
+ * ⚠️ 这几个域名**只是"默认站点"的快照**，不再作为运行时真值。
+ *
+ * ══════════════ ★★★ 多站点改造（2026-10）══════════════
+ *
+ * 用户需求：「现在有一个优学院走的中国站点不是东莞理工站点的，怎么改」
+ *
+ * 原来这里是**唯一**的域名来源 → 全 App 只能连东莞理工。
+ * 现在真正的站点定义在 `src/config/sites.ts`，运行时取
+ * `getCurrentSite()`（用户可在登录页选中国站）。
+ *
+ * 保留这个字段的原因：
+ *   · 打包自检脚本（tools/android/wire-native.cjs）会打印/校验它
+ *   · 有些诊断工具需要"打包默认值"作为对照
+ *
+ * ⚠️ 新代码**不要**再从这里取域名，请用 `getCurrentSite().services.*`
+ *    或 `resolvePath(站点, 路径)`。
+ */
 const HOSTS = {
   lms: 'https://lms.dgut.edu.cn',
   app: 'https://application.dgut.edu.cn',
@@ -55,4 +72,17 @@ export const BUILD_CONFIG = {
   versionCode: Constants.expoConfig?.android?.versionCode ?? -1,
   /** 是否跑假数据（用 String() 包一层，避免 TS 把字面量比较判成恒假） */
   isMock: String(ADAPTER) === 'mock',
+  /**
+   * 是否为测试版（版本号带 `-test`，例如 `1.1.7-test.46`）。
+   *
+   * ★ 为什么用版本号判断，而不是 env / 渠道变量：
+   *   本项目踩过坑 —— `EXPO_PUBLIC_*` 在 release 构建里不会被内联，
+   *   运行时拿到 undefined，代码静默退回默认值（见本文件开头的记录）。
+   *   而 `app.json` 的 version 一定会被 Expo 注入到 expoConfig，
+   *   正式版是 `1.1.7`、测试版是 `1.1.7-test.x`，这个区分 100% 可靠。
+   *
+   * 用途：测试期才有的功能（投票/答题、接口探测等）在正式版里隐藏，
+   *       正式版只保留稳定功能 + 体验修复。
+   */
+  isTestBuild: String(Constants.expoConfig?.version ?? '').includes('-test'),
 } as const;

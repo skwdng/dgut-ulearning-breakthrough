@@ -34,12 +34,13 @@
  *   密码永远不经过 App —— 只在学校的页面里输入。
  */
 import React, { useState } from 'react';
-import { Linking, View } from 'react-native';
+import { View } from 'react-native';
 import { Banner, Button, Card, Col, Divider, Row, ScreenScroll, Section, Spacer, StatusBadge, Txt } from '../components';
 import { color, radius, spacing } from '../theme/tokens';
 import { useCheckin } from '../state/checkinStore';
 import { getTenant } from '../config/tenants';
 import { BUILD_CONFIG } from '../config/buildConfig';
+import { getCurrentSite, saveCurrentSite } from '../config/currentSite';
 import { currentAdapterKind } from '../services/checkin';
 import { useRouter, useNavigation } from '../nav/router';
 
@@ -53,6 +54,38 @@ export function YouxueBindScreen() {
   const [message, setMessage] = useState<{ tone: 'info' | 'error' | 'warning'; text: string } | null>(null);
 
   const isMock = currentAdapterKind() === 'mock';
+
+  /**
+   * 当前选中的站点（用户可能在设置/登录页之间来回切）。
+   * ⚠️ 用 state 而不是直接读 `getCurrentSite()` —— 切换后要重渲染。
+   */
+  const [current, setCurrent] = useState(() => getCurrentSite().code);
+
+  /**
+   * ★ 选站点 → 落盘 → 打开对应登录页。
+   *
+   * ⚠️ 必须先 `saveCurrentSite` 再跳转：
+   *    登录页的 `entryUrl`（WebView 打开哪个地址）是**按当前站点**算的，
+   *    先跳转再切站点的话，WebView 已经拿着旧地址渲染了。
+   */
+  const pickSiteAndLogin = async (code: string) => {
+    setBusy(true);
+    try {
+      /** 已绑定且站点不同 → 不允许直接切（否则旧账号的 token 会拿去打新站点，必然 401） */
+      if (account && account.tenant !== code) {
+        setMessage({
+          tone: 'warning',
+          text: '已绑定的账号属于另一个站点。请先在下面「解除绑定」，再登录新站点。',
+        });
+        return;
+      }
+      await saveCurrentSite(code);
+      setCurrent(code);
+      router.push('/youxue-web-login');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const doUnbind = async () => {
     setBusy(true);
@@ -87,22 +120,14 @@ export function YouxueBindScreen() {
       */}
       <Section style={{ marginTop: spacing.md }} title="登录优学院">
         <Card>
-          <Txt variant="small" c={color.text.secondary} style={{ lineHeight: 20 }}>
-            {'点下面的按钮，会打开学校自己的登录页面，\n'}
-            {'你在那里输学号和密码就行。\n\n'}
-            {'密码只在学校页面里输入，App 看不到也不保存；\n'}
-            {'登录成功后 App 只保留一个会话凭证（token）。'}
-          </Txt>
-          <Spacer h={spacing.md} />
-          <Button
-            label="打开登录页面"
-            onPress={() => router.push('/youxue-web-login')}
-          />
-          <Spacer h={spacing.md} />
-          <Txt variant="caption" c={color.text.tertiary} style={{ lineHeight: 17 }}>
-            {'用的是系统浏览器内核，和你在手机浏览器里登录是同一套流程，\n'}
-            {'所以不会出现"浏览器能登、App 登不上"的情况。'}
-          </Txt>
+          {/*
+            用户要求（2026-10）：
+              「登录优学院下面这一块只留打开登录页面按钮，下面的全部删掉」
+
+            所以这里只剩一个按钮 —— 页面说明、"绑定后能用什么"、"登录不成功？"
+            整块都删了（见文件末尾的说明）。
+          */}
+          <Button label="打开登录页面" onPress={() => void pickSiteAndLogin(current)} />
         </Card>
       </Section>
 
@@ -181,32 +206,6 @@ export function YouxueBindScreen() {
           <Banner tone={message.tone} title={message.text} actionLabel="知道了" onAction={() => setMessage(null)} />
         </Section>
       ) : null}
-
-      {/* ── 绑定后能做什么 ── */}
-      <Section title="绑定后能用什么">
-        <Card style={{ padding: 0 }}>
-          <FeatureRow glyph="📋" label="任务查询" hint="未完成的作业与没看完的课件" />
-          <Divider />
-          <FeatureRow glyph="📚" label="课件" hint="按课程查看老师上传的资料" />
-          <Divider />
-          <FeatureRow glyph="✓" label="签到" hint="扫码签到 / 地点签到" />
-        </Card>
-      </Section>
-
-      {/* ── 登录不成功？ ── */}
-      <Section title="登录不成功？">
-        <Card>
-          <Txt variant="body2" c={color.text.secondary} style={{ lineHeight: 20 }}>
-            可以先在手机浏览器里登录一次，确认账号密码是好的：
-          </Txt>
-          <Spacer h={spacing.md} />
-          <Button
-            label="用浏览器打开优学院"
-            variant="secondary"
-            onPress={() => void Linking.openURL(tenant.entryUrl)}
-          />
-        </Card>
-      </Section>
     </ScreenScroll>
   );
 }
@@ -215,22 +214,4 @@ export function YouxueBindScreen() {
 function maskStudentId(sid: string): string {
   if (sid.length <= 6) return sid;
   return `${sid.slice(0, 4)}****${sid.slice(-2)}`;
-}
-
-function FeatureRow({ glyph, label, hint }: { glyph: string; label: string; hint: string }) {
-  return (
-    <Row justify="space-between" style={{ padding: spacing.base }} gap={spacing.md}>
-      <Row gap={spacing.md} style={{ flex: 1 }}>
-        <Txt variant="body">{glyph}</Txt>
-        <Col flex={1} gap={2}>
-          <Txt variant="body2" weight="medium">
-            {label}
-          </Txt>
-          <Txt variant="small" c={color.text.tertiary} numberOfLines={2}>
-            {hint}
-          </Txt>
-        </Col>
-      </Row>
-    </Row>
-  );
 }

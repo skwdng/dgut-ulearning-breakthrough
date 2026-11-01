@@ -128,29 +128,30 @@ console.log('\n=== 2) ★★★ 门槛在页面级，不在模块级 ===');
   t('★★ 未授权也不会隐藏入口（否则用户不知道去哪开通）', !/entitled \?[\s\S]{0,80}?EntryBlock[\s\S]{0,80}?: null/.test(YOUXUE_CODE));
 }
 
-console.log('\n=== 3) ★★ 小操作里是那三个功能 ===');
+console.log('\n=== 3) ★★ 小操作里是那几个功能 ===');
 {
   t('★★ 有「签到记录」入口', /label="签到记录"/.test(XIAOCAO_CODE));
   t('★★ 有「加减分」', /label="加减分"/.test(XIAOCAO_CODE));
-  t('★★ 有「点不中」', /label="点不中"/.test(XIAOCAO_CODE));
-  t('★ 三个都在同一个页面里', (XIAOCAO_CODE.match(/<OpRow/g) ?? []).length >= 3);
   /**
-   * ══════════════ ⚠️ 这条断言随功能落地而变（2026-10）══════════════
+   * ══════════════ ★★ 这条断言变过一次（2026-10-30）══════════════
    *
-   * 原来要求「开发中」正好 **2 个**（加减分 + 点不中）。
-   * 但「点不中」已经实装（挪到 `/dianbuzhong` 专页），所以现在只剩
-   * **1 个**（加减分）。
+   * 用户要求：「点不中功能先藏起来，以后再搞」。
+   * → 小操作页**不再显示**「点不中」入口（源码里连 label 都不该有；
+   *   被隐藏的 OpRow 放在 JSX 注释里，codeOf 已剥注释）。
    *
-   * ⚠️ 教训：把"有几个占位标记"写死成精确数字，一旦功能落地就会误报。
-   *    所以这里改成"**至少 1 个、且点不中不再是开发中**"，
-   *    这样以后加减分也实装时不会又炸。
+   * 但要防"删过头"：页面与路由必须还在（以后恢复入口即可用），
+   * 所以下面额外断言 /dianbuzhong 仍注册。
    */
+  t('★★ 点不中入口已按用户要求隐藏（小操作页不再出现）', !/label="点不中"/.test(XIAOCAO_CODE));
+  t('★★ 点不中入口不再跳转（不给 onPress）', !/router\.push\('\/dianbuzhong'\)/.test(XIAOCAO_CODE));
+  t(
+    '★★★ 防删过头：/dianbuzhong 页面与路由仍在（以后恢复入口即可用）',
+    /'\/dianbuzhong'/.test(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src', 'nav', 'screens.tsx'), 'utf8')),
+  );
+  t('★ 剩下的功能仍在同一个页面里', (XIAOCAO_CODE.match(/<OpRow/g) ?? []).length >= 2);
   {
     const devCount = (XIAOCAO_CODE.match(/text: '开发中'/g) ?? []).length;
     t('★ 未完成的仍标「开发中」（加减分还在开发中）', devCount >= 1, `开发中 ${devCount} 个`);
-    /** ★ 点不中已实装 → 入口必须能点（有 onPress 到 /dianbuzhong） */
-    t('★★★ 点不中已实装 → 入口可点（跳 /dianbuzhong）', /router\.push\('\/dianbuzhong'\)/.test(XIAOCAO_CODE));
-    t('★★ 点不中入口不再带"开发中"标记', !/label="点不中"[\s\S]{0,200}?text: '开发中'/.test(XIAOCAO_CODE));
   }
   t('★ 未完成的不可点（disabled）', /disabled/.test(XIAOCAO_CODE));
   /**

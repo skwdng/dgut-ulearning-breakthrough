@@ -25,6 +25,10 @@ import { ModulesScreen } from '../screens/modules';
 import { LicenseScreen } from '../screens/license';
 import { DiagnosticsScreen } from '../screens/diagnostics';
 import { DianBuZhongScreen } from '../screens/dianbuzhong';
+import { ServerAdminScreen } from '../screens/server-admin';
+import { VoteHomeworkScreen } from '../screens/vote-homework';
+import { VoteListScreen } from '../screens/vote-list';
+import { ClassroomIdsScreen } from '../screens/classroom-ids';
 import { LicensedScreen } from '../components/LicensedScreen';
 
 export interface PushedScreenDef {
@@ -138,4 +142,35 @@ export const PUSHED_SCREENS: Record<RoutePath, PushedScreenDef> = {
    */
   /** ★ 点不中 —— 只碰 /apps/selectperson/*，不碰考勤 */
   '/dianbuzhong': { title: '点不中', Component: DianBuZhongScreen },
+  /**
+   * ★ 服务器用户管理 —— 踢出账号 / 停用（2026-10）
+   *
+   * ⚠️ 不套 `licensed()`（授权码门槛）：它管的是"服务器上的账号名单"，
+   *    不是签到功能；真正的门槛是 **HTTP Basic 管理口令**（只在页面内存里）。
+   */
+  '/server-admin': { title: '服务器用户管理', Component: ServerAdminScreen },
+  /**
+   * ★ 「作业 / 投票」接口探测（2026-10 新增）
+   *
+   * ⚠️ 不套 `licensed()`：它唯一的入口是「小操作」（XiaoCaoScreen 内部已套
+   *    LicensedScreen），而且它用的 `sign.actions.rawApi` 自己就过授权闸，
+   *    没有授权码发不出请求。所以这里只注册，不重复加门槛。
+   * ⚠️ 只读页面：只发 GET，不会提交作业 / 投票。
+   */
+  '/vote-homework': { title: '作业 / 投票', Component: VoteHomeworkScreen },
+  /**
+   * ★ 「投票 / 答题」真实功能页（2026-10）
+   *
+   * ⚠️ 只在活动**进行中**允许提交；已结束只能看（事后补交不做）。
+   * ⚠️ 同样不套 licensed()：入口在「小操作」（已有 LicensedScreen），
+   *    而且提交走 rawApi（自带授权闸），没有码发不出去。
+   */
+  '/vote-list': { title: '投票 / 答题', Component: VoteListScreen },
+  /**
+   * ★ 「课堂 id」查询（2026-10）
+   *
+   * 投票/答题按课堂组织，但优学院不直接显示课堂 id。
+   * 这页把签到记录按课程分组，列出每门课用过的全部课堂 id。
+   */
+  '/classroom-ids': { title: '课堂 id', Component: ClassroomIdsScreen },
 };

@@ -31,6 +31,7 @@ import { NavigationShell } from './src/nav/shell';
 import { installCrashLogger, logFault } from './src/services/crashLog';
 import { markStart, mark, markReady } from './src/services/startupTiming';
 import { beginStartup, completeStartup, readStartupMark } from './src/services/startupGuard';
+import { reportStage, bootMs } from './src/services/crashReport';
 
 // 尽早安装全局崩溃兜底：未捕获的异常会写进本地日志，
 // 用户可在「设置 → 崩溃日志」里读出来。release 白屏时这是唯一的线索来源。
@@ -53,6 +54,14 @@ void beginStartup();
  */
 markStart();
 mark('root-module-loaded');
+/**
+ * ★ 启动阶段打点（2026-10）：告诉服务器"App 模块加载完了"。
+ *
+ * 用户反馈「点进去马上退出来」：服务器日志只有 entry、没有 shell_mounted，
+ * 说明进程死在**模块加载 / Provider 初始化**这段。
+ * 这里把每个阶段都打出去，下次闪退就能精确到阶段（见 services/crashReport.ts）。
+ */
+reportStage('app_module_loaded', `boot=${bootMs()}ms`);
 
 /**
  * Provider 链（顺序有讲究）：
@@ -80,6 +89,15 @@ export default function App() {
   React.useEffect(() => {
     mark('first-render');
     /**
+     * ★ 崩溃诊断打点（2026-10）：告诉服务器"界面真的挂载成功了"。
+     *
+     * 这样在服务器日志里就能看出崩溃卡在哪一段：
+     *   只有 entry、没有 shell_mounted  → 崩在模块加载 / Provider 初始化
+     *   两个都有、之后才崩               → 崩在具体页面或操作
+     * ⚠️ best-effort，失败静默（见 services/crashReport.ts）。
+     */
+    reportStage('shell_mounted', `boot=${bootMs()}ms`);
+    /**
      * ★★★ 启动守卫：判断"上次启动有没有走完"。
      *
      * ⚠️ 为什么需要（用户反馈「早上点击软件会闪退几次」）：
@@ -99,6 +117,11 @@ export default function App() {
               ' —— 可能被系统杀掉（ANR）或原生崩溃，JS 层无异常记录',
             'startup-guard',
           );
+          /** ★ 同步上报服务器：本机日志用户看不到，服务器日志我们看得到 */
+          reportStage(
+            'prev_startup_unfinished',
+            `连续第 ${prev.streak ?? 1} 次 · 上次版本 ${prev.version ?? '?'} · 本次 boot=${bootMs()}ms`,
+          );
         }
         await completeStartup();
       } catch {
@@ -109,7 +132,11 @@ export default function App() {
      * 再等一拍（下一帧）才算"界面真的可用了" ——
      * React 的 effect 在提交之后立刻跑，此时布局还没画完。
      */
-    const t = setTimeout(() => markReady(), 0);
+    const t = setTimeout(() => {
+      markReady();
+      /** ★ 界面可用打点：和 first_render 的差值 = 首帧到可用的耗时 */
+      reportStage('ready', `boot=${bootMs()}ms`);
+    }, 0);
     return () => clearTimeout(t);
   }, []);
 

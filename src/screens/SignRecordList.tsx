@@ -193,22 +193,17 @@ export function SignRecordList({
     await sign.actions.query();
   }, [sign.actions]);
 
-  /** 把某条记录改成已签到 */
-  const changeToSigned = async (r: SignDetail) => {
-    setBusyId(r.attendanceID);
-    setResult(null);
-    try {
-      const res = await sign.actions.signByMethod({
-        attendanceID: r.attendanceID,
-        classID: r.classes[0]?.classID,
-        method: r.method,
-      });
-      setResult(res.ok ? '已改为「已签到」' : `改失败：${res.message ?? '未知原因'}`);
-      if (res.ok) void query();
-    } finally {
-      setBusyId(null);
-    }
-  };
+  /**
+   * 用户要求（2026-10）：「在签到记录页把签到按钮关掉，只留改状态 ——
+   * 因为签到功能不好用」。
+   *
+   * 所以这里**删掉了原来的「签到」快捷按钮**（它会用真实签到接口 signByStu 提交，
+   * 而那个接口经常被学校风控 / 判定失败）。
+   * 现在每条记录只有「改状态」一个入口 —— 走教师侧改状态接口，更稳定。
+   *
+   * ⚠️ 注意区分：这不是"隐藏签到能力"，是**不再提供一键签到**；
+   *    改状态弹窗里仍然可以选「已签到」等状态（走 applyStatus）。
+   */
 
   /**
    * 「改签到状态」—— 打开状态选择面板。
@@ -455,7 +450,7 @@ export function SignRecordList({
             <Row gap={spacing.sm} align="center">
               <Txt variant="body">🔔</Txt>
               <Txt variant="body2" weight="semibold" c={color.warning[600]} style={{ flex: 1 }}>
-                有 {ongoing.length} 个点名正在进行，可以签到
+                有 {ongoing.length} 个点名正在进行，可以改状态
               </Txt>
             </Row>
             {ongoing.slice(0, 3).map((r) => (
@@ -687,7 +682,6 @@ export function SignRecordList({
                   r={r}
                   allowChange={allowChange}
                   busy={busyId === r.attendanceID}
-                  onChange={() => void changeToSigned(r)}
                   onCancel={() => void changeStatus(r)}
                 />
                 {i < list.length - 1 ? <Divider /> : null}
@@ -886,13 +880,12 @@ function RecordRow({
   r,
   allowChange,
   busy,
-  onChange,
   onCancel,
 }: {
   r: SignDetail;
   allowChange: boolean;
   busy: boolean;
-  onChange: () => void;
+  /** 改状态（用户要求 2026-10：只留改状态，不再提供「签到」快捷按钮） */
   onCancel: () => void;
 }) {
   const stateMeta = SIGN_STATE_META[r.state];
@@ -968,22 +961,14 @@ function RecordRow({
 
         {/*
           操作按钮。
-          ⚠️ 每条记录都要有「改状态」—— 不能只在已签到的记录上给。
-          踩过的坑：起先把「改状态」只挂在已签到那一侧，结果把记录改成「缺勤」后，
-          它进了「未签到」列表，而那边只有「签到」按钮（老记录甚至只显示"已结束"），
-          **就没法改回去了**。
-          既然教师接口能设任意状态，按钮就不应该按状态区分。
+          ★ 2026-10 用户要求：「把签到按钮关掉，只留改状态，因为签到功能不好用」。
+            所以这里**只有「改状态」** —— 原来的「签到」快捷按钮已删除
+            （它走的是真实签到接口 signByStu，经常被风控/判失败）。
+          ⚠️ 每条记录都要有「改状态」，不能只在已签到的记录上给：
+            否则把记录改成「缺勤」后，它进了「未签到」列表就再也改不回去了。
         */}
         {allowChange ? (
           <Row gap={spacing.sm} align="center">
-            {!signed ? (
-              <Button
-                label={busy ? '提交中…' : '签到'}
-                onPress={onChange}
-                disabled={busy}
-                style={{ paddingHorizontal: spacing.base, paddingVertical: 6 }}
-              />
-            ) : null}
             <Button
               label={busy ? '…' : '改状态'}
               variant="secondary"

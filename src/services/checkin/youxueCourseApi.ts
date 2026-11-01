@@ -15,7 +15,8 @@
 import { HttpClient } from './http';
 import type { RawCourse } from '../../domain/checkin';
 import type { CoursewareItem, CoursewareDetail, HomeworkItem } from '../../domain/youxue';
-import { BUILD_CONFIG } from '../../config/buildConfig';
+import { getCurrentSite } from '../../config/currentSite';
+import { resolvePath } from '../../config/sites';
 
 /** 已验证的端点 */
 export const YOUXUE_ENDPOINTS = {
@@ -66,7 +67,15 @@ export class YouxueCourseApi {
   constructor(opts: { userId: number; cookies?: Record<string, string>; userAgent?: string; host?: string }) {
     this.userId = opts.userId;
     this.http = new HttpClient({ cookies: opts.cookies, userAgent: opts.userAgent });
-    this.host = opts.host ?? BUILD_CONFIG.hosts.lms;
+    this.host = opts.host ?? getCurrentSite().services.lms;
+  }
+
+  /**
+   * 路径 → 真实 URL（多站点：本地站是路径前缀，中国站是子域名）。
+   * 见 src/config/sites.ts 的 `resolvePath`。
+   */
+  private url(p: string): string {
+    return resolvePath(getCurrentSite(), p);
   }
 
   private headers(extra: Record<string, string> = {}): Record<string, string> {
@@ -103,7 +112,7 @@ export class YouxueCourseApi {
     path: string,
   ): Promise<{ data: T | null; status: number; snippet: string; error?: string }> {
     try {
-      const res = await this.http.get(`${this.host}${path}`, { headers: this.headers() });
+      const res = await this.http.get(this.url(path), { headers: this.headers() });
       const text = String(res.body ?? '').trim();
       const snippet = text.replace(/\s+/g, ' ').slice(0, 160);
       if (res.status !== 200) {

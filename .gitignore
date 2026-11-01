@@ -10,8 +10,12 @@ dist/
 web-build/
 *.log
 .DS_Store
-android/
-ios/
+# 只忽略仓库根目录下 expo prebuild 生成的 android/ios。
+# ⚠️ 必须带前导斜杠：写 "android/" 会匹配任意层级同名目录，
+#    把 tools/android/（build-apk.cjs / wire-native.cjs / get-sdk.cjs）一起忽略掉，
+#    结果构建脚本从来没进过 git —— 2026-10-31 发现并修正。
+/android/
+/ios/
 .env.local
 .env
 # 授权名单（含他人姓名学号，绝不入库）

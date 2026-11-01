@@ -79,7 +79,7 @@ override fun getPackages(): List<ReactPackage> =
 
 ```xml
 <service
-    android:name=".delivery.DeliveryNotificationListener"
+    android:name="com.lifekit.delivery.DeliveryNotificationListener"
     android:label="LifeKit 外卖记录"
     android:exported="false"
     android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
@@ -88,6 +88,15 @@ override fun getPackages(): List<ReactPackage> =
   </intent-filter>
 </service>
 ```
+
+⚠️ **必须写全名，不要用 `.delivery.DeliveryNotificationListener` 这种相对名。**
+
+相对名会按 manifest 的 namespace（`com.lifekit.app.test`）展开成
+`com.lifekit.app.test.delivery.DeliveryNotificationListener`，而 Kotlin 源码里的
+`package com.lifekit.delivery` 编译出的类叫 `com.lifekit.delivery.DeliveryNotificationListener`，
+两边对不上就是 `ClassNotFoundException` → 每次启动 `handleCreateService` 直接杀进程
+（真机表现：点进去退一下、退两次才进得去）。这条坑在 228 之前的多个测试版上真踩过，
+定位依据是服务器 `/opt/lifekit/client-errors.log` 里的 `native_crash` 栈。
 
 ### 5) 重新构建
 

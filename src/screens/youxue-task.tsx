@@ -427,9 +427,24 @@ function HomeworkRow({ h }: { h: TaskHomework }) {
           ) : null}
         </Row>
         <Row gap={spacing.sm} align="center">
+          {/*
+            评分显示（2026-10-31 调整）：
+            · 分数原来用错误红（color.error），看着像"你这门挂了"，改成主色；
+            · 已批改但服务端没给具体分值（graded 且 score 为空）时显示"待出分"，
+              不要留白让人以为没批改。
+          */}
           {typeof h.score === 'number' ? (
-            <Txt variant="body2" weight="bold" c={color.error[500]}>
-              {h.score}
+            <Row gap={2} align="center">
+              <Txt variant="body2" weight="bold" c={color.primary[600]}>
+                {String(h.score)}
+              </Txt>
+              <Txt variant="small" c={color.text.tertiary}>
+                分
+              </Txt>
+            </Row>
+          ) : h.submitState === 'graded' ? (
+            <Txt variant="small" c={color.text.tertiary}>
+              待出分
             </Txt>
           ) : null}
           {h.endTime ? (

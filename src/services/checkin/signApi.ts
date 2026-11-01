@@ -38,7 +38,8 @@ import type {
   SignErrorInfo,
 } from '../../domain/checkin';
 import { isSignedState } from '../../domain/checkin';
-import { BUILD_CONFIG } from '../../config/buildConfig';
+import { getCurrentSite } from '../../config/currentSite';
+import { resolvePath } from '../../config/sites';
 
 /** 已验证可用的端点 */
 export const ENDPOINTS = {
@@ -295,13 +296,36 @@ export class YouxueSignApi {
   private http: HttpClient;
   private token: string;
   readonly userId: number;
+  /**
+   * ⚠️ 这个字段只用于 **Referer**（后端会校验来源域名）。
+   *    真正的请求地址请走 `url()` —— 它按**当前站点**解析，
+   *    可能落到 `apps.ulearning.cn` 这种完全不同的域名上。
+   */
   private host: string;
+
+  /**
+   * ★ 移动端 UA（与 `.recon` 抓包一致，见 youxue-api-verified.md:83）。
+   *
+   * 为什么不能沿用 HttpClient 默认的**桌面** UA：
+   *   一个手机上的 App 却发 `Windows NT 10.0 … Chrome/120` ——
+   *   正常用户流量里根本不存在这种组合，平台风控一眼就能圈出"第三方脚本"。
+   *   用户要求「匿名去请求，不要留我的信息」，所以这里跟官方 H5 保持一致：
+   *   华为 DBY2-W00 + Android 12 + WebView 内核，就是抓包里真实出现的组合。
+   *
+   * ⚠️ 仅用于**移动端 API**（本类）。CAS 登录页仍用 http.ts 的桌面 UA，
+   *   那边是要拿带 pwdEncryptSalt / execution 的桌面版页面，不能混。
+   */
+  private static readonly MOBILE_UA =
+    'Mozilla/5.0 (Linux; Android 12; DBY2-W00 Build/HUAWEIDBY2-W00; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/114.0.5735.196 Mobile Safari/537.36';
 
   constructor(opts: { token: string; userId: number; cookies?: Record<string, string>; userAgent?: string; host?: string }) {
     this.token = opts.token;
     this.userId = opts.userId;
-    this.http = new HttpClient({ cookies: opts.cookies, userAgent: opts.userAgent });
-    this.host = opts.host ?? BUILD_CONFIG.hosts.lms;
+    this.http = new HttpClient({
+      cookies: opts.cookies,
+      userAgent: opts.userAgent ?? YouxueSignApi.MOBILE_UA,
+    });
+    this.host = opts.host ?? getCurrentSite().services.lms;
   }
 
   /** 移动端请求头（照抄抓包，已实测必需） */
@@ -326,8 +350,22 @@ export class YouxueSignApi {
     return this.userId;
   }
 
+  /**
+   * 把 ENDPOINTS 里的"完整路径"变成真实 URL。
+   *
+   * ══════════════ ★★★ 多站点改造的关键单点（2026-10）══════════════
+   *
+   * 原来这里是 `` this.url(path) `` —— 只有"路径前缀模式"能用。
+   *
+   * 而优学院中国站是**子域名模式**：
+   *     `/apps/user/getUserByUserID/1`
+   *       → https://apps.ulearning.cn/user/getUserByUserID/1   （`/apps` 段去掉）
+   *
+   * 所以改成走 `resolvePath(当前站点, path)` —— 两种模式一个函数消化，
+   * ENDPOINTS 表里的几十条路径**一行都不用改**。
+   */
   private url(path: string): string {
-    return `${this.host}${path}`;
+    return resolvePath(getCurrentSite(), path);
   }
 
   /**
@@ -525,7 +563,7 @@ export class YouxueSignApi {
       const cookieNames = Object.keys(this.http.cookies ?? {});
       const hasToken = Boolean(this.token);
       const tokenLen = this.token ? this.token.length : 0;
-      const res = await this.http.get(`${this.host}${ENDPOINTS.myCourses()}`, { headers: this.apiHeaders() });
+      const res = await this.http.get(this.url(ENDPOINTS.myCourses()), { headers: this.apiHeaders() });
       const snippet = (res.body ?? '').replace(/\s+/g, ' ').slice(0, 120);
       /**
        * ★★★ 先识别"token 失效"这个**最常见**的原因，单独说清楚。
@@ -941,7 +979,7 @@ export class YouxueSignApi {
     if (input.classID !== undefined) body.classID = input.classID;
 
     try {
-      const res = await this.http.post(`${this.host}${ENDPOINTS.signCancel}`, {
+      const res = await this.http.post(this.url(ENDPOINTS.signCancel), {
         json: body,
         headers: this.apiHeaders(),
       });
@@ -1023,7 +1061,7 @@ export class YouxueSignApi {
         classID: input.classID,
       });
       try {
-        const res = await this.http.post(`${this.host}${plan.path}`, {
+        const res = await this.http.post(this.url(plan.path), {
           json: body,
           headers: this.apiHeaders(),
         });
@@ -1106,7 +1144,7 @@ export class YouxueSignApi {
 
     for (const a of attempts) {
       try {
-        const res = await this.http.post(`${this.host}${a.path}`, {
+        const res = await this.http.post(this.url(a.path), {
           json: a.body,
           headers: this.apiHeaders(),
         });
@@ -1171,7 +1209,7 @@ export class YouxueSignApi {
   }): Promise<{ ok: boolean; message: string; raw?: string }> {
     const { attendanceID, status } = input;
     try {
-      const res = await this.http.post(`${this.host}${ENDPOINTS.signByTea}`, {
+      const res = await this.http.post(this.url(ENDPOINTS.signByTea), {
         json: { attendanceID, users: [{ userID: this.userId, status }] },
         headers: this.apiHeaders(),
       });
@@ -1240,7 +1278,7 @@ export class YouxueSignApi {
     const out: Array<{ label: string; detail: string; ok: boolean }> = [];
     for (const v of variants) {
       try {
-        const res = await this.http.post(`${this.host}${ENDPOINTS.signByTea}`, {
+        const res = await this.http.post(this.url(ENDPOINTS.signByTea), {
           json: v.body,
           headers: this.apiHeaders(),
         });
@@ -1303,7 +1341,7 @@ export class YouxueSignApi {
     const out: Array<{ label: string; path: string; detail: string; exists: boolean }> = [];
     for (const c of candidates) {
       try {
-        const res = await this.http.post(`${this.host}${c.path}`, {
+        const res = await this.http.post(this.url(c.path), {
           json: c.body,
           headers: this.apiHeaders(),
         });

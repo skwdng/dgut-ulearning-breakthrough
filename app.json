@@ -2,7 +2,7 @@
   "expo": {
     "name": "LifeKit",
     "slug": "lifekit",
-    "version": "1.1.7-test.1",
+    "version": "1.1.7",
     "orientation": "portrait",
     "scheme": "lifekit",
     "userInterfaceStyle": "light",
@@ -27,7 +27,7 @@
     },
     "android": {
       "package": "com.lifekit.app",
-      "versionCode": 212,
+      "versionCode": 137,
       "permissions": [
         "INTERNET",
         "ACCESS_FINE_LOCATION",

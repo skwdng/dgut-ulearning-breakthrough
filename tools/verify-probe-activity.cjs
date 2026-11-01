@@ -286,14 +286,36 @@ console.log('\n=== 2c) ★★★ Reqable 抓包确认的主机与 roleId（2026-
    *   application/appapi/classroomapi/classroomActivity2    → 401 存在 ★
    *   lms/classroomapi/classroomActivity2                   → 404 不存在
    */
-  t('★★ 定义了两个主机（lms 主用，app 留档）', /YX_HOSTS\s*=/.test(PROBE) && /lms:/.test(PROBE) && /app:/.test(PROBE));
+  /**
+   * ══════════════ ★★★ 这两条断言改过一次（多站点改造，2026-10）══════════════
+   *
+   * 原来钉的是**常量** `YX_HOSTS = { lms, aijx, app }`。但用户要求支持
+   * 「优学院中国站」—— 那个站的接口不在 dgut 域名上，而常量改不了。
+   *
+   * 所以改成**函数** `yxHosts()`：按当前站点返回四组基址
+   * （lms / apps / courseApi / classroomApi）。
+   *
+   * ⚠️ 要盯的核心没变：**每个候选自带完整 url**，不要"单 host + 路径"
+   *    那种拼法 —— 它正是当年 `/appapi` 那条死路的原因之一。
+   */
+  t(
+    '★★ 主机改成按站点返回的函数（不再写死 dgut 常量）',
+    /export function yxHosts\(\)/.test(PROBE) && /getCurrentSite\(\)/.test(PROBE),
+  );
+  t(
+    '★★ 函数返回 lms / apps / courseApi / classroomApi 四组基址',
+    /lms: s\.lms/.test(PROBE) && /apps: s\.apps/.test(PROBE) && /courseApi: s\.courseApi/.test(PROBE),
+  );
   /**
    * ⚠️ `/appapi` 前缀常量**已删除** —— 实测证明那条路是死的
    *    （`application.dgut.edu.cn/appapi/...` 全 404）。
    *    真正的前缀是 `/apps`（在 lms 主机上）。
    */
   t('★★★ 不再有 /appapi 前缀常量（那条路已证伪）', !/const APPAPI = '\/appapi'/.test(PROBE));
-  t('★★ 每个候选自带完整 url（不再用单一 host 拼）', /url:\s*`\$\{YX_HOSTS\.lms\}\$\{path\}`/.test(PROBE));
+  t(
+    '★★ 每个候选自带完整 url，且走 resolvePath（不再用单一 host 拼）',
+    /url:\s*resolvePath\(getCurrentSite\(\),\s*path\)/.test(PROBE),
+  );
   t('★★ 请求时用 c.url 而不是 host + c.path', /http\.get\(`\$\{c\.url\}/.test(PROBE));
   t('★★ 注释记录了"两个错叠在一起"的教训', /两个错叠在一起/.test(PROBE));
   t('★★ 注释留了实测的 401/405/404 对照证据', /401/.test(PROBE) && /405/.test(PROBE) && /404/.test(PROBE));

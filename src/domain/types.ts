@@ -2,7 +2,21 @@
  * 领域模型 —— 对齐 ui-spec.md 第 6 节，并按签到自动化需要做了扩展。
  */
 
-export type TenantCode = 'dgut';
+/**
+ * 优学院「站点」代码 —— 不再是只有东莞理工。
+ *
+ * ══════════════ ★ 多站点改造（2026-10）══════════════
+ *
+ * 用户需求：「现在有一个优学院走的中国站点不是东莞理工站点的，怎么改」
+ *           「我的意思是直接在上面加一个中国站点的登陆方式」
+ *
+ *   dgut          —— 东莞理工学院（lms.dgut.edu.cn，路径前缀 + 学校 CAS）
+ *   ulearning-cn  —— 优学院中国站（apps.ulearning.cn，子域名 + 账号密码）
+ *
+ * ⚠️ 站点定义在 `src/config/sites.ts`（含域名、API 模式、登录入口），
+ *    这里只放"代码"这个最轻的标识，避免 domain 层依赖 config 层。
+ */
+export type TenantCode = 'dgut' | 'ulearning-cn';
 
 /** 会话状态 */
 export type SessionState = 'valid' | 'expired' | 'unknown';

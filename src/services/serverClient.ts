@@ -10,6 +10,7 @@
  *   万能码的降级是"用内置码"（见 domain/licenseCode.ts）。
  */
 import { store, STORE_KEYS } from './storage';
+import { bytesToBase64, utf8ToBytes } from './checkin/crypto/aes';
 
 /**
  * 默认服务器地址。
@@ -293,3 +294,119 @@ export async function fetchUserAuth(
    */
   return { ok: true, authorized: r.data.authorized };
 }
+
+/* ══════════════════════════════════════════════════════════════════
+ * ★★★ 管理面：用户列表 / 踢出账号（2026-10 新增）
+ *
+ * 用户需求（原话）：
+ *   「把某个账号踢出我的服务器，别人查的时候找不到我」
+ *
+ * 服务端早就有这两个接口（`server.cjs` 里，管理页 `web/manage.html` 也在用）：
+ *   · GET  /api/users            —— 全部用户（含授权状态、最后登录时间）
+ *   · POST /api/user/delete      —— 删除用户（记录消失，对方 App 查不到 = 被踢）
+ *   · POST /api/user/update      —— 改 authorized（停用但保留记录，可恢复）
+ *
+ * ⚠️ 这三个接口都要 **HTTP Basic 管理口令**（`admin:<口令>`），
+ *    服务器**只存哈希**，所以口令只能由用户每次手输 ——
+ *    **绝对不能把它写进 App / 存进本地存储**，否则等于公开（那正是服务端加口令要防的）。
+ *
+ * ⚠️ 为什么用 `bytesToBase64(utf8ToBytes(...))` 自己拼 Basic 头：
+ *    RN 的 Hermes 环境**没有全局 btoa**（Android 上不保证存在），
+ *    直接调会 `ReferenceError: btoa is not defined`。
+ *    aes.ts 里已经有可靠的 Base64 实现，复用它最稳。
+ * ══════════════════════════════════════════════════════════════════ */
+
+/** 管理口令 → Basic 鉴权头 */
+function basicAuthHeader(password: string): string {
+  return `Basic ${bytesToBase64(utf8ToBytes(`admin:${password}`))}`;
+}
+
+/** 服务器上的用户记录（只看用得到的字段） */
+export interface AdminUserRecord {
+  studentId: string;
+  studentName?: string;
+  school?: string;
+  tenant?: string;
+  /** 是否被授权（false = 停用：记录还在，但 App 用不了） */
+  authorized?: boolean;
+  /** 授权码（管理面才有） */
+  code?: string;
+  codeExpiresAt?: number | null;
+  usedCount?: number;
+  maxUses?: number | null;
+  /** 最后登录/使用时间（毫秒） */
+  lastLoginAt?: number;
+  lastUsedAt?: number;
+  note?: string;
+}
+
+/** 把底层错误翻成人话（401 最常见：口令不对） */
+function adminError(raw: string): string {
+  if (/401/.test(raw)) return '管理口令不对（或服务器没设口令）。请检查后重试。';
+  if (/404/.test(raw)) return '服务器上没有这个接口 —— 服务端是不是旧版本？';
+  return raw;
+}
+
+/** 读全部用户（需管理口令） */
+export async function adminFetchUsers(
+  base: string,
+  password: string,
+): Promise<{ ok: true; users: AdminUserRecord[] } | { ok: false; error: string }> {
+  const r = await fetchJson<{ users?: AdminUserRecord[] }>(
+    base,
+    '/api/users',
+    { headers: { Authorization: basicAuthHeader(password) } },
+    8000,
+  );
+  if (!r.ok) return { ok: false, error: adminError(r.error) };
+  return { ok: true, users: Array.isArray(r.data.users) ? r.data.users : [] };
+}
+
+/**
+ * 踢出账号 —— **删除**服务器上的记录（不可恢复）。
+ *
+ * 效果：该学号从用户列表里消失；对方 App 查授权状态时会得到"未登记"
+ *       → 用不了需要授权的功能（这就是"踢出"）。
+ *
+ * ⚠️ 想保留记录、只是暂时停用 → 用 `adminSetUserAuthorized(..., false)`。
+ */
+export async function adminKickUser(
+  base: string,
+  password: string,
+  studentId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const r = await fetchJson<Record<string, unknown>>(
+    base,
+    '/api/user/delete',
+    {
+      method: 'POST',
+      headers: { Authorization: basicAuthHeader(password) },
+      body: JSON.stringify({ studentId }),
+    },
+    8000,
+  );
+  if (!r.ok) return { ok: false, error: adminError(r.error) };
+  return { ok: true };
+}
+
+/** 停用 / 恢复某个账号（保留记录） */
+export async function adminSetUserAuthorized(
+  base: string,
+  password: string,
+  studentId: string,
+  authorized: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const r = await fetchJson<Record<string, unknown>>(
+    base,
+    '/api/user/update',
+    {
+      method: 'POST',
+      headers: { Authorization: basicAuthHeader(password) },
+      body: JSON.stringify({ studentId, authorized }),
+    },
+    8000,
+  );
+  if (!r.ok) return { ok: false, error: adminError(r.error) };
+  return { ok: true };
+}
+
